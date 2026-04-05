@@ -1,13 +1,11 @@
 import { createRoot } from 'react-dom/client'
-import { HashRouter } from 'react-router-dom'
+import { RouterProvider } from 'react-router-dom'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import './index.css'
-import App from './App.tsx'
+import { router } from './router'
 
 createRoot(document.getElementById('root')!).render(
-  <HashRouter>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </HashRouter>,
+  <ErrorBoundary>
+    <RouterProvider router={router} />
+  </ErrorBoundary>,
 )

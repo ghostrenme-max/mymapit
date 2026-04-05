@@ -103,5 +103,7 @@ export type AiInfoCard = {
   worldElements: string[]
   places: string[]
   objects: string[]
+  /** 인포 시트 텍스트를 바탕으로 한 세계관·캐릭터 키워드 제안 */
+  suggestedKeywords: string[]
   createdAt: string
 }

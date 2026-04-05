@@ -425,6 +425,7 @@ export function MemoEditorScreen() {
       worldElements: aiDraft.worldElements,
       places: aiDraft.places,
       objects: aiDraft.objects,
+      suggestedKeywords: aiDraft.suggestedKeywords,
     })
     setAiSheetOpen(false)
     setAiDraft(null)

@@ -20,7 +20,7 @@ export function SplashScreen() {
         <h1 className="font-title-italic text-4xl font-semibold tracking-tight text-white md:text-5xl">
           mymapit
         </h1>
-        <p className="mt-4 max-w-[280px] text-pretty break-keep text-sm font-medium leading-relaxed tracking-wide text-white/70">
+        <p className="mx-auto mt-4 max-w-[280px] text-center text-pretty break-keep text-sm font-medium leading-relaxed tracking-wide text-white/70">
           창작자의 세계관 도구
         </p>
       </div>

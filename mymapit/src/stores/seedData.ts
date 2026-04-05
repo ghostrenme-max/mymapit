@@ -217,6 +217,18 @@ export const seedAiCards: AiInfoCard[] = [
     worldElements: ['잔향', '기억 거래'],
     places: ['잊혀진 기록관', '네온 거리'],
     objects: ['잔향 증폭기'],
+    suggestedKeywords: [
+      '아리아 노트',
+      '카인 벨로스',
+      '잔향',
+      '기억 거래',
+      '잊혀진 기록관',
+      '네온 거리',
+      '잔향 증폭기',
+      '다크',
+      '절망',
+      '진실과 비밀',
+    ],
     createdAt: new Date().toISOString(),
   },
 ]

@@ -35,7 +35,15 @@ export function ArtBookScreen() {
 
   const selectTab = (key: TabKey) => {
     setTab(key)
-    setSearchParams({ tab: key }, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        p.set('tab', key)
+        if (key !== 'story') p.delete('node')
+        return p
+      },
+      { replace: true },
+    )
   }
 
   return (

@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/shallow'
 import { SectionCard } from '../common/SectionCard'
 import { TajiTag } from '../common/TajiTag'
@@ -34,6 +35,10 @@ const LABEL: Record<StoryNode['type'], string> = {
 }
 
 export function StoryTab() {
+  const [searchParams] = useSearchParams()
+  const focusNodeId = searchParams.get('node')
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+
   const pid = useProjectStore((s) => s.currentProjectId)
   const nodes = useArtbookStore(useShallow((s) => (pid ? s.storyNodes.filter((n) => n.projectId === pid) : [])))
   const aiCards = useArtbookStore(
@@ -41,6 +46,23 @@ export function StoryTab() {
   )
 
   const flat = useMemo(() => (pid ? flattenTree(pid, nodes) : []), [pid, nodes])
+
+  useEffect(() => {
+    if (!focusNodeId) {
+      setHighlightId(null)
+      return
+    }
+    const t1 = window.setTimeout(() => {
+      const el = document.getElementById(`story-node-${focusNodeId}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setHighlightId(focusNodeId)
+    }, 80)
+    const t2 = window.setTimeout(() => setHighlightId(null), 2800)
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [focusNodeId, flat.length])
   const tensions = useMemo(() => flat.map(({ n }) => n.tension), [flat])
   const sortedAi = useMemo(
     () => [...aiCards].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -60,7 +82,12 @@ export function StoryTab() {
           {flat.map(({ n, depth }) => (
             <li
               key={n.id}
-              className="rounded-sm border border-ab-border bg-ab-card px-2 py-2 text-sm"
+              id={`story-node-${n.id}`}
+              className={`rounded-sm border bg-ab-card px-2 py-2 text-sm transition-[box-shadow] duration-300 ${
+                highlightId === n.id
+                  ? 'border-ab-text shadow-[0_0_0_2px_var(--color-ab-text)]'
+                  : 'border-ab-border'
+              }`}
               style={{ marginLeft: depth * 12 }}
             >
               <div className="flex items-center justify-between gap-2">
@@ -88,6 +115,18 @@ export function StoryTab() {
                   </TajiTag>
                 ))}
               </div>
+              {c.suggestedKeywords.length > 0 && (
+                <div className="mt-2 border-t border-ab-border/60 pt-2">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-ab-sub">제안 키워드</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {c.suggestedKeywords.map((k, i) => (
+                      <TajiTag key={`${k}-${i}`} variant="gray">
+                        {k}
+                      </TajiTag>
+                    ))}
+                  </div>
+                </div>
+              )}
             </li>
           ))}
           {sortedAi.length === 0 && <li className="text-xs text-ab-sub">저장된 @@ 분석이 없습니다.</li>}

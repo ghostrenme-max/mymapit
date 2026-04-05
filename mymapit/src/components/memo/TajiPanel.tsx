@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/shallow'
 import { MENTION_TAB_ROWS, mentionKindMeta } from '../../constants/mentionKinds'
 import { useArtbookStore } from '../../stores/artbookStore'
@@ -21,7 +22,10 @@ function legendChipStyle(row: { color: string; bg: string }) {
   } as const
 }
 
+type StoryLink = { id: string; title: string }
+
 export function TajiPanel({ open, mention, onClose }: Props) {
+  const navigate = useNavigate()
   const [showColorLegend, setShowColorLegend] = useState(false)
 
   const characters = useMentionStore((s) => s.characters)
@@ -43,30 +47,35 @@ export function TajiPanel({ open, mention, onClose }: Props) {
           role: '—',
           body: '캐릭터 정보 없음',
           tags: [] as string[],
-          story: [] as string[],
+          storyLinks: [] as StoryLink[],
           quote: undefined as string | undefined,
         }
-      const stories = c.storyNodeIds
-        .map((id) => storyNodes.find((n) => n.id === id)?.title)
-        .filter(Boolean) as string[]
+      const storyLinks: StoryLink[] = c.storyNodeIds
+        .map((id) => {
+          const n = storyNodes.find((x) => x.id === id)
+          return n ? { id: n.id, title: n.title } : null
+        })
+        .filter((x): x is StoryLink => x != null)
       return {
         title: c.name,
         role: c.role,
         body: c.personality || c.ability || '—',
         tags: c.tags,
         quote: c.quote,
-        story: stories,
+        storyLinks,
       }
     }
 
     if (kind === 'event') {
       const n = storyNodes.find((x) => x.id === targetId)
+      const storyLinks: StoryLink[] =
+        n ? [{ id: n.id, title: n.title }] : []
       return {
         title: n?.title ?? targetName,
         role: n ? n.type.toUpperCase() : 'EVENT',
         body: n?.description ?? '서사 노드 정보 없음',
         tags: [] as string[],
-        story: [] as string[],
+        storyLinks,
         quote: undefined as string | undefined,
         tension: n?.tension,
       }
@@ -79,7 +88,7 @@ export function TajiPanel({ open, mention, onClose }: Props) {
         role: '용어',
         body: `카테고리: ${k?.category ?? '—'}`,
         tags: [] as string[],
-        story: [] as string[],
+        storyLinks: [] as StoryLink[],
         quote: undefined as string | undefined,
       }
     }
@@ -90,10 +99,15 @@ export function TajiPanel({ open, mention, onClose }: Props) {
       role: o?.type ?? kind,
       body: o?.description ?? '항목 정보 없음',
       tags: o?.tags ?? [],
-      story: [] as string[],
+      storyLinks: [] as StoryLink[],
       quote: undefined as string | undefined,
     }
   }, [mention, characters, worldObjects, storyNodes, keywords])
+
+  const goToStoryNode = (nodeId: string) => {
+    onClose()
+    navigate(`/artbook?tab=story&node=${encodeURIComponent(nodeId)}`)
+  }
 
   useEffect(() => {
     setShowColorLegend(false)
@@ -130,10 +144,7 @@ export function TajiPanel({ open, mention, onClose }: Props) {
             <div className="mb-4 text-[11px] leading-relaxed" style={legendChipStyle(meta)}>
               <span className="font-semibold">{meta.label}</span>
               <span className="mx-1 opacity-80">·</span>
-              <span className="opacity-90">{meta.hueName}</span>
-              <span className="mx-1 opacity-60">·</span>
               <span>{meta.meaning}</span>
-              <span className="mt-1 block text-[10px] font-mono opacity-80">{meta.color}</span>
             </div>
 
             <h2 className="font-title-italic text-xl font-semibold text-ab-text">{detail.title}</h2>
@@ -156,13 +167,19 @@ export function TajiPanel({ open, mention, onClose }: Props) {
                 ))}
               </div>
             )}
-            {detail.story.length > 0 && (
+            {detail.storyLinks.length > 0 && (
               <div className="mt-6">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-ab-sub">등장 서사</p>
                 <ul className="mt-2 space-y-1 text-sm text-ab-text">
-                  {detail.story.map((t) => (
-                    <li key={t} className="rounded-sm bg-ab-muted/50 px-2 py-1.5">
-                      {t}
+                  {detail.storyLinks.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => goToStoryNode(s.id)}
+                        className="w-full rounded-sm bg-ab-muted/50 px-2 py-1.5 text-left text-ab-text active:bg-ab-muted"
+                      >
+                        {s.title}
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -186,10 +203,7 @@ export function TajiPanel({ open, mention, onClose }: Props) {
                     >
                       <span className="font-semibold">{row.label}</span>
                       <span className="mx-1 opacity-70">·</span>
-                      <span className="opacity-90">{row.hueName}</span>
-                      <span className="mx-1 opacity-60">·</span>
                       <span>{row.meaning}</span>
-                      <span className="mt-0.5 block font-mono text-[9px] opacity-75">{row.color}</span>
                     </li>
                   ))}
                 </ul>

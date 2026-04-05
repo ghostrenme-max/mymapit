@@ -21,8 +21,8 @@ function Chips({ items }: { items: string[] }) {
   if (items.length === 0) return <span className="text-ab-sub">—</span>
   return (
     <div className="flex flex-wrap gap-1">
-      {items.map((t) => (
-        <span key={t} className="rounded-[2px] bg-ab-muted px-2 py-0.5 text-[11px]">
+      {items.map((t, i) => (
+        <span key={`${t}-${i}`} className="rounded-[2px] bg-ab-muted px-2 py-0.5 text-[11px]">
           {t}
         </span>
       ))}
@@ -77,6 +77,12 @@ export function AiInfoBottomSheet({ open, draft, sourceText, onClose, onSaveToAr
                 </div>
                 <span className="tabular-nums text-xs text-ab-sub">{draft.tension}/10</span>
               </div>
+            </Row>
+            <Row label="제안 키워드">
+              <p className="mb-2 text-[11px] leading-snug text-ab-sub">
+                시트에 모인 단어·설정을 바탕으로 세계관·캐릭터에 맞는 태그 후보입니다.
+              </p>
+              <Chips items={draft.suggestedKeywords} />
             </Row>
           </div>
         </div>
