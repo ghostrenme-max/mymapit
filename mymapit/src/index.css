@@ -36,9 +36,8 @@ body {
 }
 
 /**
- * 스플래시: 부모 max-width와 무관하게 화면 전체를 검정(#111110)으로 덮음.
- * 100vh / 100dvh / -webkit-fill-available로 모바일 주소창·iOS Safari 높이 대응.
- * env(safe-area-inset-*)로 노치·홈 인디케이터 영역 반영.
+ * 풀스크린 검정: App의 max-width 밖까지 덮음 (스플래시·온보딩 등).
+ * 100svh → 100dvh → -webkit-fill-available 순으로 뷰포트 높이 대응.
  */
 .ab-splash-viewport {
   position: fixed;
@@ -46,7 +45,9 @@ body {
   z-index: 100;
   box-sizing: border-box;
   width: 100%;
+  max-width: none;
   min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
   min-height: -webkit-fill-available;
   background-color: var(--color-ab-text);

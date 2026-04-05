@@ -10,6 +10,8 @@ import { useSnapMapStore } from '../../stores/snapMapStore'
 const W = 360
 const H = 440
 const NODE_R = 22
+/** 탭 vs 드래그 구분 (px²) */
+const DRAG_THRESHOLD_SQ = 49
 
 function clientToSvg(svg: SVGSVGElement, clientX: number, clientY: number): Point {
   const pt = svg.createSVGPoint()
@@ -40,19 +42,39 @@ export function SnapMapTab() {
   const [positions, setPositions] = useState<Record<string, Point>>({})
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [hoverEdge, setHoverEdge] = useState<string | null>(null)
+  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const dragRef = useRef<{ id: string } | null>(null)
+  const pendingPointerRef = useRef<{ nodeId: string; sx: number; sy: number } | null>(null)
   const lastSigRef = useRef('')
+
+  const highlight = useMemo(() => {
+    if (!focusedNodeId) {
+      return { nodeIds: new Set<string>(), edgeKeys: new Set<string>() }
+    }
+    const nodeIds = new Set<string>([focusedNodeId])
+    const edgeKeys = new Set<string>()
+    for (const e of graph.edges) {
+      if (e.source === focusedNodeId || e.target === focusedNodeId) {
+        nodeIds.add(e.source)
+        nodeIds.add(e.target)
+        edgeKeys.add(`${e.source}-${e.target}`)
+      }
+    }
+    return { nodeIds, edgeKeys }
+  }, [focusedNodeId, graph.edges])
 
   useEffect(() => {
     const g = graphRef.current
     if (!pid || g.signature === '' || g.nodes.length === 0) {
       lastSigRef.current = ''
       setPositions({})
+      setFocusedNodeId(null)
       return
     }
     if (lastSigRef.current === g.signature) return
     lastSigRef.current = g.signature
+    setFocusedNodeId(null)
     const saved = useSnapMapStore.getState().layouts[pid] ?? {}
     const ids = g.nodes.map((n) => n.id)
     const next = runForceLayout(ids, g.edges, W, H, saved, 95)
@@ -84,16 +106,39 @@ export function SnapMapTab() {
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
-      const d = dragRef.current
       const svg = svgRef.current
-      if (!d || !svg) return
+      if (!svg) return
+
+      const pend = pendingPointerRef.current
+      if (pend && dragRef.current === null) {
+        const dx = e.clientX - pend.sx
+        const dy = e.clientY - pend.sy
+        if (dx * dx + dy * dy > DRAG_THRESHOLD_SQ) {
+          dragRef.current = { id: pend.nodeId }
+          pendingPointerRef.current = null
+        } else {
+          return
+        }
+      }
+
+      const d = dragRef.current
+      if (!d) return
       const p = clientToSvg(svg, e.clientX, e.clientY)
       const x = Math.max(NODE_R + 4, Math.min(W - NODE_R - 4, p.x))
       const y = Math.max(NODE_R + 4, Math.min(H - NODE_R - 4, p.y))
-      const pt = snapEnabled ? snapToGrid({ x, y }) : { x, y }
-      setPositions((prev) => ({ ...prev, [d.id]: pt }))
+      setPositions((prev) => ({ ...prev, [d.id]: { x, y } }))
     }
-    const onUp = () => endWindowDrag()
+
+    const onUp = () => {
+      const pend = pendingPointerRef.current
+      const dragging = dragRef.current !== null
+      if (pend && !dragging) {
+        setFocusedNodeId((prev) => (prev === pend.nodeId ? null : pend.nodeId))
+      }
+      pendingPointerRef.current = null
+      if (dragging) endWindowDrag()
+    }
+
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onUp)
@@ -102,12 +147,12 @@ export function SnapMapTab() {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
     }
-  }, [snapEnabled, endWindowDrag])
+  }, [endWindowDrag])
 
   const onPointerDownNode = useCallback((e: React.PointerEvent, nodeId: string) => {
     e.preventDefault()
-    dragRef.current = { id: nodeId }
-    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+    e.stopPropagation()
+    pendingPointerRef.current = { nodeId, sx: e.clientX, sy: e.clientY }
   }, [])
 
   const autoArrange = useCallback(() => {
@@ -145,8 +190,8 @@ export function SnapMapTab() {
         <p className="text-[11px] text-ab-sub">Snap 연결맵</p>
         <h2 className="font-title-italic text-xl font-semibold text-ab-text">@ 공출현 관계</h2>
         <p className="mt-1 text-xs leading-relaxed text-ab-sub">
-          한 메모 안에서 같이 쓰인 멘션은 곧 &quot;한 장면에서 동시에 등장&quot;한 설정으로 봅니다. 노드를 드래그하면{' '}
-          {SNAP_GRID}px 격자에 맞춰 정렬됩니다.
+          한 메모 안에서 같이 쓰인 멘션은 곧 &quot;한 장면에서 동시에 등장&quot;한 설정으로 봅니다. 노드를 탭하면 이어진 선과
+          연결 노드가 강조되고, 드래그 후 손을 뗄 때 {SNAP_GRID}px 격자에 맞춰집니다.
         </p>
       </div>
 
@@ -165,7 +210,7 @@ export function SnapMapTab() {
             onChange={(e) => setSnapEnabled(e.target.checked)}
             className="rounded border-ab-border"
           />
-          격자 스냅 ({SNAP_GRID}px)
+          놓을 때 격자 스냅 ({SNAP_GRID}px)
         </label>
       </div>
 
@@ -202,6 +247,13 @@ export function SnapMapTab() {
             </pattern>
           </defs>
           <rect width={W} height={H} fill={snapEnabled ? 'url(#snapGrid)' : '#F7F6F4'} />
+          <rect
+            width={W}
+            height={H}
+            fill="transparent"
+            onPointerDown={() => setFocusedNodeId(null)}
+            style={{ cursor: 'default' }}
+          />
 
           {graph.edges.map((e) => {
             const a = positions[e.source]
@@ -211,6 +263,9 @@ export function SnapMapTab() {
             const midY = (a.y + b.y) / 2
             const ek = `${e.source}-${e.target}`
             const on = hoverEdge === ek
+            const hl = highlight.edgeKeys.has(ek)
+            const strokeW = hl ? 3.8 : on ? 2.2 : 1.2
+            const strokeOp = hl ? 0.92 : 0.55 + (on ? 0.25 : 0)
             return (
               <g key={ek}>
                 <line
@@ -219,8 +274,8 @@ export function SnapMapTab() {
                   x2={b.x}
                   y2={b.y}
                   stroke="#9A9590"
-                  strokeWidth={on ? 2.2 : 1.2}
-                  strokeOpacity={0.55 + (on ? 0.25 : 0)}
+                  strokeWidth={strokeW}
+                  strokeOpacity={strokeOp}
                   className="pointer-events-none"
                 />
                 <line
@@ -262,6 +317,8 @@ export function SnapMapTab() {
             const p = positions[n.id]
             if (!p) return null
             const meta = mentionKindMeta(n.kind)
+            const ring = highlight.nodeIds.has(n.id)
+            const ringW = ring ? 4.25 : 2.5
             return (
               <g key={n.id} transform={`translate(${p.x}, ${p.y})`}>
                 <circle
@@ -274,7 +331,7 @@ export function SnapMapTab() {
                   r={NODE_R}
                   fill="#FFFFFF"
                   stroke={meta.color}
-                  strokeWidth={2.5}
+                  strokeWidth={ringW}
                   className="pointer-events-none"
                 />
                 <text

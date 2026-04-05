@@ -1,15 +1,12 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loadDemoWorld } from '../stores/actions'
 import { useUserStore } from '../stores/userStore'
 
 type Slide = {
   title: string
-  /** 문단 단위 줄바꿈 */
   paragraphs: string[]
-  /** 상단 큰 기호 (Snap 슬라이드는 생략하고 그래픽만) */
   emoji?: string
-  /** Snap 슬라이드: 격자 + 노드 미니 프리뷰 */
   snapPreview?: boolean
 }
 
@@ -49,8 +46,10 @@ const SLIDES: Slide[] = [
 ]
 
 function SnapConnectionMini() {
+  const rid = useId().replace(/:/g, '')
+  const gridId = `onb-grid-${rid}`
   return (
-    <div className="mt-6 flex justify-center" aria-hidden>
+    <div className="mt-4 flex justify-center sm:mt-6" aria-hidden>
       <svg
         viewBox="0 0 132 88"
         className="h-[5.5rem] w-[8.25rem] text-white"
@@ -58,11 +57,11 @@ function SnapConnectionMini() {
         aria-label=""
       >
         <defs>
-          <pattern id="onbSnapGrid" width="10" height="10" patternUnits="userSpaceOnUse">
+          <pattern id={gridId} width="10" height="10" patternUnits="userSpaceOnUse">
             <path d="M10 0H0V10" fill="none" stroke="currentColor" strokeOpacity={0.12} strokeWidth={0.6} />
           </pattern>
         </defs>
-        <rect width="132" height="88" rx="6" fill="url(#onbSnapGrid)" className="text-white" />
+        <rect width="132" height="88" rx="6" fill={`url(#${gridId})`} className="text-white" />
         <rect x="1" y="1" width="130" height="86" rx="5" fill="none" stroke="currentColor" strokeOpacity={0.2} />
         <line x1="44" y1="32" x2="88" y2="44" stroke="currentColor" strokeWidth={1.5} strokeOpacity={0.45} />
         <line x1="44" y1="32" x2="56" y2="64" stroke="currentColor" strokeWidth={1.5} strokeOpacity={0.45} />
@@ -100,21 +99,23 @@ export function OnboardingScreen() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-ab-text px-5 pb-8 pt-12 text-white">
-      <p className="text-center text-xs text-ab-sub">
+    <div className="ab-splash-viewport flex flex-col overscroll-none text-white">
+      <p className="shrink-0 pt-1 text-center text-xs text-ab-sub">
         {step + 1} / {SLIDES.length}
       </p>
-      <div className="mt-8 flex min-h-0 flex-1 flex-col items-center px-1 text-center">
+
+      {/* 상단: 아이콘·제목·문단 (이전과 동일하게 위쪽 정렬) */}
+      <div className="flex shrink-0 flex-col items-center px-1 pt-8 text-center sm:pt-10">
         {s.emoji != null && s.emoji !== '' && (
           <span className="text-5xl leading-none sm:text-6xl" aria-hidden>
             {s.emoji}
           </span>
         )}
         {s.snapPreview && <SnapConnectionMini />}
-        <h2 className="mt-6 max-w-[300px] text-pretty break-keep font-title-italic text-2xl font-semibold leading-snug">
+        <h2 className="mt-6 max-w-[min(100%,20rem)] text-pretty break-keep font-title-italic text-2xl font-semibold leading-snug text-white sm:mt-8">
           {s.title}
         </h2>
-        <div className="mt-5 w-full max-w-[300px] space-y-3 text-left sm:text-center">
+        <div className="mt-4 w-full max-w-[min(100%,20rem)] space-y-3 text-center sm:mt-5">
           {s.paragraphs.map((p, i) => (
             <p key={i} className="text-pretty break-keep text-sm leading-relaxed text-ab-sub">
               {p}
@@ -123,36 +124,38 @@ export function OnboardingScreen() {
         </div>
       </div>
 
-      <div className="mt-8 flex items-center justify-between gap-3 px-1">
-        <button
-          type="button"
-          onClick={goPrev}
-          disabled={isFirst}
-          className="min-w-[4.5rem] rounded-md border border-white/25 py-2.5 text-xs font-medium text-white/90 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/25"
-        >
-          &lt; 이전
-        </button>
-        <div className="flex shrink-0 justify-center gap-2">
-          {SLIDES.map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 w-1.5 rounded-full transition-colors ${i === step ? 'bg-white' : 'bg-white/30'}`}
-              aria-hidden
-            />
-          ))}
+      {/* 하단: 이전 | 점 | 다음 + 건너뛰기 — mt-auto로 화면 아래에 고정 */}
+      <div className="mt-auto flex w-full flex-col gap-4 pb-1">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <button
+            type="button"
+            onClick={goPrev}
+            disabled={isFirst}
+            className="min-w-[4.25rem] rounded-md border border-white/25 py-2.5 text-xs font-medium text-white/90 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-white/25"
+          >
+            &lt; 이전
+          </button>
+          <div className="flex shrink-0 justify-center gap-2">
+            {SLIDES.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full transition-colors ${i === step ? 'bg-white' : 'bg-white/30'}`}
+                aria-hidden
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={goNext}
+            className="min-w-[4.25rem] rounded-md border border-white/25 bg-white/10 py-2.5 text-xs font-semibold text-white"
+          >
+            {isLast ? '시작하기' : '다음 >'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={goNext}
-          className="min-w-[4.5rem] rounded-md border border-white/25 bg-white/10 py-2.5 text-xs font-semibold text-white"
-        >
-          {isLast ? '시작하기' : '다음 >'}
+        <button type="button" onClick={finish} className="py-2 text-center text-xs text-ab-sub">
+          건너뛰기
         </button>
       </div>
-
-      <button type="button" onClick={finish} className="mt-5 py-2 text-center text-xs text-ab-sub">
-        건너뛰기
-      </button>
     </div>
   )
 }
