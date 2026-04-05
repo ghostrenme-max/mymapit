@@ -259,7 +259,7 @@ export function CharacterTab() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="char-picker-title"
-            className="fixed left-1/2 top-1/2 z-[90] w-[min(340px,calc(100vw-24px))] max-h-[min(72vh,480px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm border border-ab-border border-l-2 border-l-ab-text bg-ab-card shadow-xl"
+            className="fixed left-1/2 top-1/2 z-[90] w-[min(340px,calc(100vw-24px))] max-h-[min(72vh,480px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-sm border border-ab-border border-l-2 border-l-ab-text bg-ab-card"
           >
             <div className="border-b border-ab-border px-4 py-3">
               <h2 id="char-picker-title" className="font-title-italic text-lg font-semibold text-ab-text">

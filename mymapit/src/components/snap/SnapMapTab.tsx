@@ -1,26 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
-import { MENTION_TAB_ROWS, mentionKindMeta } from '../../constants/mentionKinds'
-import { runForceLayout, snapToGrid, SNAP_GRID, type Point } from '../../lib/forceLayout'
-import { buildMentionCooccurrenceGraph } from '../../lib/mentionGraph'
+import { mentionKindMeta, type MentionKind } from '../../constants/mentionKinds'
+import { buildMentionCooccurrenceGraph, buildNeighborMap } from '../../lib/mentionGraph'
+import { snapChipTheme } from '../../lib/snapChipTheme'
 import { useMemoStore } from '../../stores/memoStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useSnapMapStore } from '../../stores/snapMapStore'
+import type { SnapNeighborDTO } from '../../stores/snapMapStore'
 
-const W = 360
-const H = 440
-const NODE_R = 22
-/** 탭 vs 드래그 구분 (px²) */
-const DRAG_THRESHOLD_SQ = 49
+const chMeta = mentionKindMeta('character')
+const placeMeta = mentionKindMeta('place')
 
-function clientToSvg(svg: SVGSVGElement, clientX: number, clientY: number): Point {
-  const pt = svg.createSVGPoint()
-  pt.x = clientX
-  pt.y = clientY
-  const ctm = svg.getScreenCTM()
-  if (!ctm) return { x: clientX, y: clientY }
-  const p = pt.matrixTransform(ctm.inverse())
-  return { x: p.x, y: p.y }
+function kindLabel(kind: MentionKind) {
+  return mentionKindMeta(kind).label
 }
 
 export function SnapMapTab() {
@@ -28,333 +20,179 @@ export function SnapMapTab() {
   const memoGroups = useMemoStore(useShallow((s) => s.memoGroups))
   const memos = useMemoStore(useShallow((s) => s.memos))
 
-  const setLayout = useSnapMapStore((s) => s.setLayout)
-  const clearProjectLayout = useSnapMapStore((s) => s.clearProjectLayout)
+  const syncSnapLinks = useSnapMapStore((s) => s.syncSnapLinks)
+  const storedBundle = useSnapMapStore((s) => (pid ? s.linkBundles[pid] : undefined))
 
   const graph = useMemo(() => {
     if (!pid) return { nodes: [] as const, edges: [] as const, signature: '' }
     return buildMentionCooccurrenceGraph(pid, memoGroups, memos)
   }, [pid, memoGroups, memos])
 
-  const graphRef = useRef(graph)
-  graphRef.current = graph
-
-  const [positions, setPositions] = useState<Record<string, Point>>({})
-  const [snapEnabled, setSnapEnabled] = useState(true)
-  const [hoverEdge, setHoverEdge] = useState<string | null>(null)
-  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null)
-  const svgRef = useRef<SVGSVGElement | null>(null)
-  const dragRef = useRef<{ id: string } | null>(null)
-  const pendingPointerRef = useRef<{ nodeId: string; sx: number; sy: number } | null>(null)
-  const lastSigRef = useRef('')
-
-  const highlight = useMemo(() => {
-    if (!focusedNodeId) {
-      return { nodeIds: new Set<string>(), edgeKeys: new Set<string>() }
-    }
-    const nodeIds = new Set<string>([focusedNodeId])
-    const edgeKeys = new Set<string>()
-    for (const e of graph.edges) {
-      if (e.source === focusedNodeId || e.target === focusedNodeId) {
-        nodeIds.add(e.source)
-        nodeIds.add(e.target)
-        edgeKeys.add(`${e.source}-${e.target}`)
-      }
-    }
-    return { nodeIds, edgeKeys }
-  }, [focusedNodeId, graph.edges])
-
-  useEffect(() => {
-    const g = graphRef.current
-    if (!pid || g.signature === '' || g.nodes.length === 0) {
-      lastSigRef.current = ''
-      setPositions({})
-      setFocusedNodeId(null)
-      return
-    }
-    if (lastSigRef.current === g.signature) return
-    lastSigRef.current = g.signature
-    setFocusedNodeId(null)
-    const saved = useSnapMapStore.getState().layouts[pid] ?? {}
-    const ids = g.nodes.map((n) => n.id)
-    const next = runForceLayout(ids, g.edges, W, H, saved, 95)
-    setPositions(next)
-    setLayout(pid, next)
-  }, [pid, graph.signature, setLayout])
-
-  const persistPositions = useCallback(
-    (next: Record<string, Point>) => {
-      if (!pid) return
-      setLayout(pid, next)
-    },
-    [pid, setLayout],
+  const neighborMap = useMemo(
+    () => buildNeighborMap([...graph.nodes], [...graph.edges]),
+    [graph.nodes, graph.edges],
   )
 
-  const endWindowDrag = useCallback(() => {
-    const id = dragRef.current?.id
-    dragRef.current = null
-    if (!id || !pid) return
-    setPositions((prev) => {
-      const pos = prev[id]
-      if (!pos) return prev
-      const snapped = snapEnabled ? snapToGrid(pos) : pos
-      const next = { ...prev, [id]: snapped }
-      persistPositions(next)
-      return next
-    })
-  }, [pid, persistPositions, snapEnabled])
+  const neighborsRecord = useMemo(() => {
+    const o: Record<string, SnapNeighborDTO[]> = {}
+    for (const [id, list] of neighborMap) {
+      o[id] = list.map(({ node, weight }) => ({
+        id: node.id,
+        weight,
+        kind: node.kind,
+        label: node.label,
+      }))
+    }
+    return o
+  }, [neighborMap])
 
   useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      const svg = svgRef.current
-      if (!svg) return
+    if (!pid || graph.signature === '') return
+    syncSnapLinks(pid, graph.signature, neighborsRecord)
+  }, [pid, graph.signature, neighborsRecord, syncSnapLinks])
 
-      const pend = pendingPointerRef.current
-      if (pend && dragRef.current === null) {
-        const dx = e.clientX - pend.sx
-        const dy = e.clientY - pend.sy
-        if (dx * dx + dy * dy > DRAG_THRESHOLD_SQ) {
-          dragRef.current = { id: pend.nodeId }
-          pendingPointerRef.current = null
-        } else {
-          return
-        }
-      }
+  const effectiveNeighbors =
+    storedBundle?.signature === graph.signature ? storedBundle.neighbors : neighborsRecord
 
-      const d = dragRef.current
-      if (!d) return
-      const p = clientToSvg(svg, e.clientX, e.clientY)
-      const x = Math.max(NODE_R + 4, Math.min(W - NODE_R - 4, p.x))
-      const y = Math.max(NODE_R + 4, Math.min(H - NODE_R - 4, p.y))
-      setPositions((prev) => ({ ...prev, [d.id]: { x, y } }))
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const selectedNode = useMemo(
+    () => graph.nodes.find((n) => n.id === selectedId) ?? null,
+    [graph.nodes, selectedId],
+  )
+
+  const linkedIds = useMemo(() => {
+    if (!selectedId) return new Set<string>()
+    const set = new Set<string>()
+    for (const e of graph.edges) {
+      if (e.source === selectedId) set.add(e.target)
+      else if (e.target === selectedId) set.add(e.source)
     }
+    return set
+  }, [graph.edges, selectedId])
 
-    const onUp = () => {
-      const pend = pendingPointerRef.current
-      const dragging = dragRef.current !== null
-      if (pend && !dragging) {
-        setFocusedNodeId((prev) => (prev === pend.nodeId ? null : pend.nodeId))
-      }
-      pendingPointerRef.current = null
-      if (dragging) endWindowDrag()
-    }
+  const snapResults = selectedId ? (effectiveNeighbors[selectedId] ?? []) : []
 
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
-    }
-  }, [endWindowDrag])
-
-  const onPointerDownNode = useCallback((e: React.PointerEvent, nodeId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    pendingPointerRef.current = { nodeId, sx: e.clientX, sy: e.clientY }
-  }, [])
-
-  const autoArrange = useCallback(() => {
-    if (!pid) return
-    clearProjectLayout(pid)
-    lastSigRef.current = ''
-    const ids = graph.nodes.map((n) => n.id)
-    const next = runForceLayout(ids, graph.edges, W, H, {}, 95)
-    setPositions(next)
-    setLayout(pid, next)
-    lastSigRef.current = graph.signature
-  }, [pid, clearProjectLayout, graph, setLayout])
+  const toggleNode = (id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id))
+  }
 
   if (!pid) {
     return (
-      <div className="px-4 py-10 text-center text-sm text-ab-sub">프로젝트를 선택한 뒤 연결맵을 열어 주세요.</div>
+      <div className="min-h-full bg-ab-bg px-4 py-10 text-center text-sm text-ab-sub">
+        프로젝트를 선택한 뒤 연결맵을 열어 주세요.
+      </div>
     )
   }
 
   if (graph.nodes.length === 0) {
     return (
-      <div className="flex flex-col gap-3 px-4 py-8">
+      <div className="flex min-h-full flex-col gap-3 bg-ab-bg px-4 py-8">
         <p className="text-center font-title-italic text-lg text-ab-text">아직 연결할 @멘션이 없어요</p>
         <p className="text-center text-sm leading-relaxed text-ab-sub">
-          메모 본문에 <span className="text-ab-text">@캐릭터</span>·<span className="text-ab-text">@장소</span> 등을 넣고
-          저장하면, 같은 메모에 함께 등장한 항목끼리 선으로 이어집니다.
+          메모 본문에{' '}
+          <span className="font-semibold" style={{ color: chMeta.color }}>
+            @캐릭터
+          </span>
+          ·
+          <span className="font-semibold" style={{ color: placeMeta.color }}>
+            @장소
+          </span>
+          등을 넣고 저장하면, 같은 메모에 함께 등장한 항목끼리 Snap 연결로 묶입니다.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-3 px-3 pb-6 pt-2">
-      <div>
-        <p className="text-[11px] text-ab-sub">Snap 연결맵</p>
-        <h2 className="font-title-italic text-xl font-semibold text-ab-text">@ 공출현 관계</h2>
-        <p className="mt-1 text-xs leading-relaxed text-ab-sub">
-          한 메모 안에서 같이 쓰인 멘션은 곧 &quot;한 장면에서 동시에 등장&quot;한 설정으로 봅니다. 노드를 탭하면 이어진 선과
-          연결 노드가 강조되고, 드래그 후 손을 뗄 때 {SNAP_GRID}px 격자에 맞춰집니다.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={autoArrange}
-          className="rounded-sm border border-ab-border bg-ab-card px-3 py-1.5 text-xs font-semibold text-ab-text"
-        >
-          자동 정렬
-        </button>
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-ab-sub">
-          <input
-            type="checkbox"
-            checked={snapEnabled}
-            onChange={(e) => setSnapEnabled(e.target.checked)}
-            className="rounded border-ab-border"
-          />
-          놓을 때 격자 스냅 ({SNAP_GRID}px)
-        </label>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 border-b border-ab-border pb-2">
-        <span className="w-full text-[10px] font-semibold uppercase tracking-wide text-ab-sub">범례</span>
-        {MENTION_TAB_ROWS.map((row) => (
-          <span
-            key={row.kind}
-            className="rounded-[2px] px-2 py-0.5 text-[10px] font-medium"
-            style={{ color: row.color, backgroundColor: row.bg }}
-          >
-            {row.label}
-          </span>
-        ))}
-      </div>
-
-      <div className="overflow-x-auto rounded-sm border border-ab-border bg-ab-card">
-        <svg
-          ref={svgRef}
-          width={W}
-          height={H}
-          viewBox={`0 0 ${W} ${H}`}
-          className="touch-none select-none"
-        >
-          <defs>
-            <pattern id="snapGrid" width={SNAP_GRID} height={SNAP_GRID} patternUnits="userSpaceOnUse">
-              <path
-                d={`M ${SNAP_GRID} 0 L 0 0 0 ${SNAP_GRID}`}
-                fill="none"
-                stroke="#D8D4CF"
-                strokeWidth={0.4}
-                opacity={0.55}
-              />
-            </pattern>
-          </defs>
-          <rect width={W} height={H} fill={snapEnabled ? 'url(#snapGrid)' : '#F7F6F4'} />
-          <rect
-            width={W}
-            height={H}
-            fill="transparent"
-            onPointerDown={() => setFocusedNodeId(null)}
-            style={{ cursor: 'default' }}
-          />
-
-          {graph.edges.map((e) => {
-            const a = positions[e.source]
-            const b = positions[e.target]
-            if (!a || !b) return null
-            const midX = (a.x + b.x) / 2
-            const midY = (a.y + b.y) / 2
-            const ek = `${e.source}-${e.target}`
-            const on = hoverEdge === ek
-            const hl = highlight.edgeKeys.has(ek)
-            const strokeW = hl ? 3.8 : on ? 2.2 : 1.2
-            const strokeOp = hl ? 0.92 : 0.55 + (on ? 0.25 : 0)
-            return (
-              <g key={ek}>
-                <line
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke="#9A9590"
-                  strokeWidth={strokeW}
-                  strokeOpacity={strokeOp}
-                  className="pointer-events-none"
-                />
-                <line
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke="transparent"
-                  strokeWidth={14}
-                  className="cursor-pointer"
-                  onPointerEnter={() => setHoverEdge(ek)}
-                  onPointerLeave={() => setHoverEdge((h) => (h === ek ? null : h))}
-                />
-                {on && (
-                  <g>
-                    <rect
-                      x={midX - 52}
-                      y={midY - 20}
-                      width={104}
-                      height={36}
-                      rx={3}
-                      fill="#111110"
-                      fillOpacity={0.88}
-                    />
-                    <text x={midX} y={midY - 4} textAnchor="middle" fill="#FFFFFF" fontSize={9}>
-                      같은 메모 {e.weight}회
-                    </text>
-                    <text x={midX} y={midY + 10} textAnchor="middle" fill="#D8D4CF" fontSize={7}>
-                      {e.memoTitles[0] ?? ''}
-                      {e.memoTitles.length > 1 ? ' 외' : ''}
-                    </text>
-                  </g>
-                )}
-              </g>
-            )
-          })}
-
-          {graph.nodes.map((n) => {
-            const p = positions[n.id]
-            if (!p) return null
-            const meta = mentionKindMeta(n.kind)
-            const ring = highlight.nodeIds.has(n.id)
-            const ringW = ring ? 4.25 : 2.5
-            return (
-              <g key={n.id} transform={`translate(${p.x}, ${p.y})`}>
-                <circle
-                  r={NODE_R + 8}
-                  fill="transparent"
-                  className="cursor-grab touch-none active:cursor-grabbing"
-                  onPointerDown={(e) => onPointerDownNode(e, n.id)}
-                />
-                <circle
-                  r={NODE_R}
-                  fill="#FFFFFF"
-                  stroke={meta.color}
-                  strokeWidth={ringW}
-                  className="pointer-events-none"
-                />
-                <text
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill={meta.color}
-                  fontSize={10}
-                  fontWeight={600}
-                  className="pointer-events-none"
-                  style={{ fontFamily: 'Syne, system-ui, sans-serif' }}
-                >
-                  {n.label.length > 5 ? `${n.label.slice(0, 4)}…` : n.label}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
-      </div>
-
-      <p className="text-[10px] leading-relaxed text-ab-sub">
-        노드 {graph.nodes.length}개 · 연결 {graph.edges.length}개 · 메모에 같이 나온 횟수가 많을수록 가까이 붙도록 자동
-        정렬합니다.
+    <div className="min-h-full bg-ab-bg px-3 pb-8 pt-4">
+      <p className="mx-auto mb-4 max-w-[320px] text-center text-[11px] leading-[1.6] text-ab-sub">
+        노드를 탭하면 Snap처럼 연결된 항목이 밝아지고, 아래에 순서대로 모여요.
       </p>
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        {graph.nodes.map((n) => {
+          const th = snapChipTheme(n.kind)
+          const active = selectedId === n.id
+          const linked = selectedId != null && linkedIds.has(n.id) && !active
+          const dim = selectedId != null && !active && !linked
+
+          let opacity = 0.45
+          let scale = 1
+          let borderW = 1.5
+          if (active) {
+            opacity = 1
+            scale = 1.06
+            borderW = 2
+          } else if (linked) opacity = 0.8
+          else if (dim) opacity = 0.18
+
+          return (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => toggleNode(n.id)}
+              className="cursor-pointer font-semibold transition-all duration-200"
+              style={{
+                padding: '7px 14px',
+                borderRadius: 20,
+                fontSize: 11,
+                color: th.color,
+                backgroundColor: th.bg,
+                border: `${borderW}px solid ${th.border}`,
+                opacity,
+                transform: `scale(${scale})`,
+              }}
+            >
+              @{n.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {selectedNode && (
+        <div className="mb-3 rounded-lg border border-ab-border bg-ab-card px-3 py-2.5">
+          <p className="text-[13px] font-semibold text-ab-text">{selectedNode.label}</p>
+          <p className="mt-0.5 text-[10px] text-ab-sub">
+            {kindLabel(selectedNode.kind)} · 연결된 항목 {snapResults.length}개
+          </p>
+        </div>
+      )}
+
+      <div className="mb-3.5 h-px bg-ab-border" />
+
+      <p className="mb-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-ab-point">SNAP 결과</p>
+
+      {selectedId == null ? (
+        <p className="text-center text-[11px] text-ab-sub">노드를 선택하면 연결된 항목이 여기 모여요</p>
+      ) : (
+        <div className="flex flex-wrap gap-[7px]" key={selectedId}>
+          {snapResults.length === 0 ? (
+            <p className="text-center text-[11px] text-ab-sub">이 노드와 같은 메모에 함께 등장한 항목이 없어요</p>
+          ) : (
+            snapResults.map((item, index) => {
+              const th = snapChipTheme(item.kind)
+              return (
+                <span
+                  key={item.id}
+                  className="ab-snap-result-chip font-semibold"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    color: th.color,
+                    backgroundColor: th.bgResult,
+                    border: `1px solid ${th.borderResult}`,
+                    animationDelay: `${index * 0.07}s`,
+                  }}
+                >
+                  @{item.label}
+                </span>
+              )
+            })
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -11,7 +11,7 @@ type Props = {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-sm border border-ab-border border-l-2 border-l-ab-text bg-ab-card px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-ab-sub">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ab-point">{label}</p>
       <div className="mt-1 text-sm text-ab-text">{children}</div>
     </div>
   )
@@ -37,10 +37,11 @@ export function AiInfoBottomSheet({ open, draft, sourceText, onClose, onSaveToAr
     <>
       <button type="button" className="fixed inset-0 z-[58] bg-ab-text/35" aria-label="닫기" onClick={onClose} />
       <div
-        className="fixed bottom-0 left-1/2 z-[59] flex max-h-[85dvh] w-full max-w-[390px] -translate-x-1/2 flex-col rounded-t-xl border border-ab-border border-b-0 bg-ab-card shadow-[0_-12px_40px_rgba(17,17,16,0.12)]"
+        className="fixed bottom-0 left-1/2 z-[59] flex max-h-[85dvh] w-full max-w-[390px] -translate-x-1/2 flex-col rounded-t-xl border border-ab-border border-b-0 bg-ab-card"
         style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
         onMouseDown={(e) => e.preventDefault()}
       >
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-ab-border" aria-hidden />
         <div className="flex shrink-0 items-center justify-between border-b border-ab-border px-4 py-3">
           <h2 className="font-title-italic text-lg font-semibold text-ab-text">AI 인포 페이지</h2>
           <button type="button" onClick={onClose} className="text-sm text-ab-sub">

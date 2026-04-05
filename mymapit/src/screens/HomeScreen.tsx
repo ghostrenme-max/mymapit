@@ -11,6 +11,7 @@ import { useUserStore } from '../stores/userStore'
 export function HomeScreen() {
   const navigate = useNavigate()
   const setSidebar = useUserStore((s) => s.setSidebarOpen)
+  const isPro = useUserStore((s) => s.isPro)
   const pid = useProjectStore((s) => s.currentProjectId)
   const setCurrent = useProjectStore((s) => s.setCurrentProjectId)
   const projects = useProjectStore((s) => s.projects)
@@ -95,7 +96,7 @@ export function HomeScreen() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="그룹 검색…"
-          className="w-full rounded-sm border border-ab-border bg-ab-bg px-3 py-2 text-sm outline-none"
+          className="w-full rounded-sm border border-ab-border bg-ab-input px-3 py-2 text-sm outline-none placeholder:text-ab-hint"
         />
       </div>
 
@@ -119,6 +120,20 @@ export function HomeScreen() {
             onClick={() => navigate(`/memo/group/${g.id}`)}
           />
         ))}
+
+        {!isPro && groups.length >= 3 && (
+          <button
+            type="button"
+            onClick={() => navigate('/premium')}
+            className="flex w-full flex-col gap-2 rounded-sm border-2 border-dashed border-ab-border bg-ab-muted/40 px-4 py-5 text-left"
+          >
+            <p className="font-title-italic text-base font-semibold text-ab-text">다음 그룹은 PRO</p>
+            <p className="text-xs leading-relaxed text-ab-sub">
+              무료는 메모 그룹 3개까지예요. PRO(₩4,900)로 무제한 그룹·@@ AI 월 10회·광고 제거를 쓸 수 있어요.
+            </p>
+            <span className="text-xs font-semibold text-ab-text underline">프리미엄 보기 →</span>
+          </button>
+        )}
 
         {filtered.length === 0 && (
           <p className="py-8 text-center text-sm text-ab-sub">검색 결과가 없습니다.</p>

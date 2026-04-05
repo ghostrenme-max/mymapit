@@ -27,7 +27,7 @@ export function Sidebar() {
         aria-label="메뉴 닫기"
         onClick={close}
       />
-      <aside className="fixed left-0 top-0 z-[70] flex h-full w-[min(280px,88vw)] flex-col bg-ab-card shadow-xl">
+      <aside className="fixed left-0 top-0 z-[70] flex h-full w-[min(280px,88vw)] flex-col bg-ab-card">
         <div className="border-b border-ab-border px-4 py-3">
           <p className="font-title-italic text-lg font-semibold text-ab-text">mymapit</p>
           <p className="mt-0.5 text-[11px] text-ab-sub">프로젝트</p>
@@ -70,7 +70,7 @@ export function Sidebar() {
             + 새 프로젝트
           </button>
 
-          <hr className="my-2 border-ab-border" />
+          <hr className="my-2 border-0 border-t border-ab-muted" />
 
           <button
             type="button"
@@ -78,7 +78,7 @@ export function Sidebar() {
               close()
               navigate('/questions')
             }}
-            className="rounded-sm px-3 py-2.5 text-left text-sm text-ab-text hover:bg-ab-muted/80"
+            className="rounded-sm px-3 py-2.5 text-left text-sm text-ab-point hover:bg-ab-muted/80"
           >
             ✦ 샘플 세계관 구축
           </button>

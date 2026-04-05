@@ -10,7 +10,7 @@ export function ProUpsellSheet({ open, onClose, onGoPremium }: Props) {
     <>
       <button type="button" className="fixed inset-0 z-[60] bg-ab-text/40" aria-label="닫기" onClick={onClose} />
       <div
-        className="fixed bottom-0 left-1/2 z-[61] w-full max-w-[390px] -translate-x-1/2 rounded-t-lg border border-ab-border border-b-0 bg-ab-card px-4 pt-4 shadow-xl"
+        className="fixed bottom-0 left-1/2 z-[61] w-full max-w-[390px] -translate-x-1/2 rounded-t-lg border border-ab-border border-b-0 bg-ab-card px-4 pt-4"
         style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}
       >
         <p className="font-title-italic text-lg font-semibold text-ab-text">PRO 기능</p>
@@ -28,7 +28,7 @@ export function ProUpsellSheet({ open, onClose, onGoPremium }: Props) {
           <button
             type="button"
             onClick={onGoPremium}
-            className="flex-1 rounded-sm bg-ab-text py-2.5 text-sm font-semibold text-ab-card"
+            className="flex-1 rounded-sm bg-ab-point py-2.5 text-sm font-semibold text-ab-card"
           >
             프리미엄 보기
           </button>

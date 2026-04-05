@@ -10,6 +10,8 @@ import { TajiTag } from '../common/TajiTag'
 type Props = {
   open: boolean
   mention: Mention | null
+  /** 현재 메모 본문에서 함께 등장한 다른 @ (Snap 연결) */
+  sameMemoMentions?: Mention[]
   onClose: () => void
 }
 
@@ -24,7 +26,7 @@ function legendChipStyle(row: { color: string; bg: string }) {
 
 type StoryLink = { id: string; title: string }
 
-export function TajiPanel({ open, mention, onClose }: Props) {
+export function TajiPanel({ open, mention, sameMemoMentions = [], onClose }: Props) {
   const navigate = useNavigate()
   const [showColorLegend, setShowColorLegend] = useState(false)
 
@@ -123,7 +125,7 @@ export function TajiPanel({ open, mention, onClose }: Props) {
         aria-label="패널 닫기"
         onClick={onClose}
       />
-      <aside className="animate-ab-slide-in-right fixed right-0 top-0 z-[56] flex h-full w-[min(320px,88vw)] flex-col border-l border-ab-border bg-ab-card shadow-xl">
+      <aside className="animate-ab-slide-in-right fixed right-0 top-0 z-[56] flex h-full w-[min(320px,88vw)] flex-col border-y border-r border-ab-border border-l-2 border-l-ab-text bg-ab-card">
         <div
           className="flex shrink-0 items-center justify-between border-b border-ab-border px-3 py-2.5"
           style={{ backgroundColor: meta.bg, borderBottomColor: meta.color, borderBottomWidth: 2 }}
@@ -165,6 +167,33 @@ export function TajiPanel({ open, mention, onClose }: Props) {
                     {t}
                   </TajiTag>
                 ))}
+              </div>
+            )}
+            {sameMemoMentions.length > 0 && (
+              <div className="mt-6">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ab-sub">같은 메모 Snap</p>
+                <p className="mt-1 text-[11px] leading-snug text-ab-sub">
+                  이 메모 안에서 함께 쓰인 @ — 에디터에서도 연관 멘션이 강조됩니다.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {sameMemoMentions.map((m) => {
+                    const mm = mentionKindMeta(m.kind)
+                    return (
+                      <span
+                        key={m.id}
+                        className="text-[11px] font-semibold"
+                        style={{
+                          color: mm.color,
+                          backgroundColor: mm.bg,
+                          padding: '2px 8px',
+                          borderRadius: 3,
+                        }}
+                      >
+                        @{m.targetName}
+                      </span>
+                    )
+                  })}
+                </div>
               </div>
             )}
             {detail.storyLinks.length > 0 && (

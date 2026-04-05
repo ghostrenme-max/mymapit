@@ -21,7 +21,7 @@ export function PremiumScreen() {
       <p className="text-sm text-ab-sub">인디 창작에 맞는 일시불 플랜입니다.</p>
 
       <div className="grid grid-cols-2 gap-2">
-        <SectionCard title="FREE">
+        <SectionCard title="FREE" className="shadow-none">
           <ul className="space-y-1.5 text-[11px] text-ab-sub">
             <li>메모 그룹 3개</li>
             <li>@ 단일 주석 무제한</li>
@@ -29,8 +29,11 @@ export function PremiumScreen() {
             <li>광고 있음</li>
           </ul>
         </SectionCard>
-        <SectionCard title="PRO ₩4,900">
-          <ul className="space-y-1.5 text-[11px] text-ab-text">
+        <SectionCard
+          title="PRO ₩4,900"
+          className="border-ab-border border-l-2 border-l-ab-text bg-ab-text text-ab-card shadow-none [&_h3]:text-ab-card [&_ul]:text-ab-card/90"
+        >
+          <ul className="space-y-1.5 text-[11px]">
             <li>메모 그룹 무제한</li>
             <li>광고 제거</li>
             <li>아트북 전체</li>
@@ -42,7 +45,7 @@ export function PremiumScreen() {
       <button
         type="button"
         onClick={unlock}
-        className="w-full rounded-md bg-ab-text py-3 text-sm font-semibold text-ab-card"
+        className="w-full rounded-md bg-ab-point py-3 text-sm font-semibold text-ab-card"
       >
         PRO 구매하기 (데모: 즉시 활성화)
       </button>

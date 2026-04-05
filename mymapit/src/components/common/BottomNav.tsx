@@ -11,7 +11,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-1/2 z-40 flex h-[52px] w-full max-w-[390px] -translate-x-1/2 items-stretch border-t border-ab-text/20 bg-ab-nav px-1"
+      className="fixed bottom-0 left-1/2 z-40 flex h-[52px] w-full max-w-[390px] -translate-x-1/2 items-stretch border-t border-white/10 bg-ab-nav px-1"
       style={{ paddingBottom: 'max(6px, env(safe-area-inset-bottom))' }}
     >
       {tabs.map((t) => {
@@ -22,7 +22,7 @@ export function BottomNav() {
             to={t.to}
             end
             className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium tracking-tight transition-colors ${
-              active ? 'text-amber-300' : 'text-ab-sub'
+              active ? 'text-ab-nav-on' : 'text-ab-nav-off'
             }`}
           >
             <span className="text-sm leading-none" aria-hidden>

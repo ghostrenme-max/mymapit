@@ -79,7 +79,7 @@ export function MentionPopup({ projectId, filterQuery, onPick, onClose }: Props)
 
   return (
     <div
-      className="fixed bottom-0 left-1/2 z-50 w-full max-w-[390px] -translate-x-1/2 border-t border-ab-border bg-ab-card pb-2 shadow-[0_-8px_24px_rgba(17,17,16,0.08)]"
+      className="fixed bottom-0 left-1/2 z-50 w-full max-w-[390px] -translate-x-1/2 border-t border-ab-border bg-ab-card pb-2"
       onMouseDown={(e) => e.preventDefault()}
       role="presentation"
     >

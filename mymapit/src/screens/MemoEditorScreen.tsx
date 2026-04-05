@@ -6,6 +6,8 @@ import { MentionPopup, type MentionPick } from '../components/memo/MentionPopup'
 import { ProUpsellSheet } from '../components/memo/ProUpsellSheet'
 import { TajiPanel } from '../components/memo/TajiPanel'
 import { isMentionKind, legacyDatasetTypeToKind } from '../constants/mentionKinds'
+import { detectDoubleAtTrigger, isInsideDoubleAtDraft } from '../lib/doubleAtTrigger'
+import { deleteTriggeredDoubleAtBlock, getPlainTextBeforeCaret } from '../lib/editorPlainText'
 import type { AiExtractDraft } from '../lib/mockAiExtract'
 import { mockAiExtract } from '../lib/mockAiExtract'
 import { useArtbookStore } from '../stores/artbookStore'
@@ -108,6 +110,7 @@ export function MemoEditorScreen() {
   const [aiSourceText, setAiSourceText] = useState('')
   const [proUpsellOpen, setProUpsellOpen] = useState(false)
   const [leaveModalOpen, setLeaveModalOpen] = useState(false)
+  const [sameMemoSnap, setSameMemoSnap] = useState<Mention[]>([])
 
   const closeMentionPopup = useCallback(() => {
     setPopupOpen(false)
@@ -139,6 +142,26 @@ export function MemoEditorScreen() {
       mentions: [...m.mentions],
     }
   }, [memoId])
+
+  useEffect(() => {
+    const root = editorRef.current
+    if (!root) return
+    root.querySelectorAll('.ab-mention').forEach((el) => {
+      el.classList.remove('ab-mention-snap-active', 'ab-mention-snap-linked')
+    })
+    if (!panelMention) return
+    root.querySelectorAll<HTMLElement>('.ab-mention').forEach((el) => {
+      const tid = el.dataset.targetId
+      if (!tid) return
+      if (tid === panelMention.targetId) el.classList.add('ab-mention-snap-active')
+      else el.classList.add('ab-mention-snap-linked')
+    })
+    return () => {
+      root.querySelectorAll('.ab-mention').forEach((el) => {
+        el.classList.remove('ab-mention-snap-active', 'ab-mention-snap-linked')
+      })
+    }
+  }, [panelMention])
 
   titleRef.current = title
 
@@ -191,42 +214,25 @@ export function MemoEditorScreen() {
     if (!root || analyzingAi || aiSheetOpen || aiRunLockRef.current) return
     const sel = window.getSelection()
     if (!sel?.rangeCount || !root.contains(sel.anchorNode)) return
-    const end = getCaretOffsetWithin(root)
-    if (end < 0) return
-    const range = sel.getRangeAt(0).cloneRange()
-    const pre = document.createRange()
-    pre.selectNodeContents(root)
-    pre.setEnd(range.startContainer, range.startOffset)
-    const before = pre.toString()
-    const aiMatch = before.match(/@@\s+$/)
-    if (!aiMatch) return
+    const before = getPlainTextBeforeCaret(root) ?? ''
+    if (!detectDoubleAtTrigger(before)) return
 
+    aiRunLockRef.current = true
     if (!tryConsumeAi()) {
+      aiRunLockRef.current = false
       setProUpsellOpen(true)
       return
     }
 
-    aiRunLockRef.current = true
-
-    const start = end - aiMatch[0].length
-    const delRange = rangeForCharOffsets(root, start, end)
-    const plainBefore = root.innerText
+    const plainFull = root.innerText.replace(/\r\n/g, '\n')
 
     setAnalyzingAi(true)
     if (aiTimeoutRef.current != null) window.clearTimeout(aiTimeoutRef.current)
     aiTimeoutRef.current = window.setTimeout(() => {
       aiTimeoutRef.current = null
-      if (delRange) {
-        delRange.deleteContents()
-        const nb = document.createTextNode('')
-        delRange.insertNode(nb)
-        delRange.setStartAfter(nb)
-        delRange.collapse(true)
-        sel.removeAllRanges()
-        sel.addRange(delRange)
-      }
-      const draft = mockAiExtract(plainBefore, pid)
-      setAiSourceText(plainBefore.slice(0, 500))
+      deleteTriggeredDoubleAtBlock(root)
+      const draft = mockAiExtract(plainFull, pid)
+      setAiSourceText(plainFull.slice(0, 500))
       setAiDraft(draft)
       setAnalyzingAi(false)
       setAiSheetOpen(true)
@@ -254,9 +260,9 @@ export function MemoEditorScreen() {
     const pre = document.createRange()
     pre.selectNodeContents(root)
     pre.setEnd(range.startContainer, range.startOffset)
-    const before = pre.toString()
+    const before = getPlainTextBeforeCaret(root) ?? pre.toString()
 
-    if (before.match(/@@\s+$/) || /@@$/.test(before)) {
+    if (isInsideDoubleAtDraft(before)) {
       setPopupOpen(false)
       return
     }
@@ -307,9 +313,19 @@ export function MemoEditorScreen() {
     runAiAfterDoubleAt()
   }
 
+  const onEditorKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    openMentionFromEditor()
+    if (e.key === 'Enter') {
+      window.queueMicrotask(() => runAiAfterDoubleAt())
+    } else {
+      runAiAfterDoubleAt()
+    }
+  }
+
   const onEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const root = editorRef.current
     const el = (e.target as HTMLElement).closest('.ab-mention') as HTMLElement | null
-    if (!el) return
+    if (!el || !root) return
     const rawKind = el.dataset.kind
     const kind: MentionKind | null = isMentionKind(rawKind)
       ? rawKind
@@ -318,6 +334,8 @@ export function MemoEditorScreen() {
     const targetName = el.dataset.targetName
     const id = el.dataset.mentionId ?? 'men'
     if (kind && targetId && targetName) {
+      const all = parseMentionsFromEditor(root)
+      setSameMemoSnap(all.filter((m) => m.targetId !== targetId))
       setPanelMention({ id, kind, targetId, targetName })
     }
   }
@@ -510,15 +528,23 @@ export function MemoEditorScreen() {
         </button>
       </div>
 
+      <p className="border-b border-ab-border bg-ab-muted/30 px-3 py-2 text-[10px] leading-snug text-ab-sub">
+        <span className="font-semibold text-ab-text">@@ AI</span>
+        <br />
+        @@ 뒤에 문장을 쓰고 엔터를 치거나,
+        <br />
+        20자 이상 이어 쓰면 분석이 돌아가요
+      </p>
+
       <div className="relative min-h-[200px] flex-1">
         <div
           ref={editorRef}
-          className="ab-editor h-full overflow-y-auto px-3 py-3 text-sm leading-relaxed text-ab-text outline-none"
+          className="ab-editor h-full overflow-y-auto bg-ab-input px-3 py-3 text-sm leading-relaxed text-ab-text outline-none"
           contentEditable
           suppressContentEditableWarning
-          data-placeholder="@ 단일 · @@ AI(PRO) — 본문에서 @@ 후 스페이스로 분석"
+          data-placeholder="메모 본문… (@ 단일 멘션)"
           onInput={onEditorInput}
-          onKeyUp={() => openMentionFromEditor()}
+          onKeyUp={onEditorKeyUp}
           onClick={onEditorClick}
           onBlur={flushContent}
         />
@@ -534,7 +560,15 @@ export function MemoEditorScreen() {
         />
       )}
 
-      <TajiPanel open={!!panelMention} mention={panelMention} onClose={() => setPanelMention(null)} />
+      <TajiPanel
+        open={!!panelMention}
+        mention={panelMention}
+        sameMemoMentions={sameMemoSnap}
+        onClose={() => {
+          setPanelMention(null)
+          setSameMemoSnap([])
+        }}
+      />
 
       <AiInfoBottomSheet
         open={aiSheetOpen}
@@ -568,7 +602,7 @@ export function MemoEditorScreen() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="leave-save-title"
-            className="fixed left-1/2 top-1/2 z-[90] w-[min(320px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-sm border border-ab-border border-l-2 border-l-ab-text bg-ab-card p-4 shadow-xl"
+            className="fixed left-1/2 top-1/2 z-[90] w-[min(320px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-sm border border-ab-border border-l-2 border-l-ab-text bg-ab-card p-4"
           >
             <h2 id="leave-save-title" className="font-title-italic text-lg font-semibold text-ab-text">
               저장하시겠습니까?

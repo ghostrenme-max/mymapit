@@ -90,3 +90,31 @@ export function buildMentionCooccurrenceGraph(
 
   return { nodes, edges, signature }
 }
+
+export type NeighborWithWeight = { node: GraphNode; weight: number }
+
+/** 노드 id → 같은 메모 공출현 이웃 (가중치 내림차순) */
+export function buildNeighborMap(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+): Map<string, NeighborWithWeight[]> {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const acc = new Map<string, NeighborWithWeight[]>()
+  for (const n of nodes) acc.set(n.id, [])
+
+  for (const e of edges) {
+    const na = byId.get(e.source)
+    const nb = byId.get(e.target)
+    if (!na || !nb) continue
+    acc.get(e.source)!.push({ node: nb, weight: e.weight })
+    acc.get(e.target)!.push({ node: na, weight: e.weight })
+  }
+
+  for (const [, arr] of acc) {
+    arr.sort(
+      (a, b) =>
+        b.weight - a.weight || a.node.label.localeCompare(b.node.label, 'ko'),
+    )
+  }
+  return acc
+}
