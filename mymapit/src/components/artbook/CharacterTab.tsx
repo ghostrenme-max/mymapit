@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/shallow'
 import {
   CHARACTER_RELATION_KIND_ORDER,
@@ -6,13 +7,16 @@ import {
   coerceCharacterRelationKind,
   isCharacterRelationKind,
 } from '../../constants/characterRelationKinds'
+import { TRIGGER_EMOTION_LABEL, TRIGGER_EMOTION_ORDER, type TriggerEmotion } from '../../constants/storyNarrative'
 import { CharacterFieldEditBar, type CharacterEditMode } from '../character/CharacterFieldEditBar'
 import { ConceptArtSlot } from '../common/ConceptArtSlot'
 import { SectionCard } from '../common/SectionCard'
 import { TajiTag } from '../common/TajiTag'
 import { VoiceBars } from '../character/VoiceBars'
 import { extractDominantHexColors } from '../../lib/extractDominantColors'
+import { orderedStoryNodes } from '../../lib/storyTree'
 import { INFO_PLACEHOLDER } from '../../lib/syncArtbookFromMemos'
+import { useArtbookStore } from '../../stores/artbookStore'
 import { useMentionStore } from '../../stores/mentionStore'
 import { useProjectStore } from '../../stores/projectStore'
 import type { Character, CharacterRelation, CharacterValueEntry } from '../../stores/types'
@@ -88,29 +92,52 @@ function CharacterRelationSection({ c, allChars }: { c: Character; allChars: Cha
                     className="rounded-md border border-ab-border bg-ab-muted/30 p-3"
                   >
                     <p className="text-sm font-semibold text-ab-text">{name}</p>
-                    <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                      <select
-                        value={rk}
-                        onChange={(e) => {
-                          const nk = isCharacterRelationKind(e.target.value) ? e.target.value : 'other'
-                          updateRelation(index, { ...rel, kind: nk })
-                        }}
-                        aria-label={`${name}와의 관계 유형`}
-                        className="w-full shrink-0 rounded-md border border-ab-border bg-ab-input px-2 py-2 text-xs text-ab-text sm:max-w-[140px]"
-                      >
-                        {CHARACTER_RELATION_KIND_ORDER.map((k) => (
-                          <option key={k} value={k}>
-                            {characterRelationKindMeta(k).label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={rel.emotion}
-                        onChange={(e) => updateRelation(index, { ...rel, emotion: e.target.value })}
-                        placeholder="감정·상세 메모 (한 줄)"
-                        aria-label={`${name}와의 관계 메모`}
-                        className="min-w-0 flex-1 rounded-md border border-ab-border bg-ab-input px-2 py-2 text-xs text-ab-text"
-                      />
+                    <div className="mt-2 flex flex-col gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                        <select
+                          value={rk}
+                          onChange={(e) => {
+                            const nk = isCharacterRelationKind(e.target.value) ? e.target.value : 'other'
+                            updateRelation(index, { ...rel, kind: nk })
+                          }}
+                          aria-label={`${name}와의 관계 유형`}
+                          className="w-full shrink-0 rounded-md border border-ab-border bg-ab-input px-2 py-2 text-xs text-ab-text sm:max-w-[140px]"
+                        >
+                          {CHARACTER_RELATION_KIND_ORDER.map((k) => (
+                            <option key={k} value={k}>
+                              {characterRelationKindMeta(k).label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          value={rel.emotion}
+                          onChange={(e) => updateRelation(index, { ...rel, emotion: e.target.value })}
+                          placeholder="감정·상세 메모 (한 줄)"
+                          aria-label={`${name}와의 관계 메모`}
+                          className="min-w-0 flex-1 rounded-md border border-ab-border bg-ab-input px-2 py-2 text-xs text-ab-text"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-ab-sub">이벤트 트리거용 감정 축 (선택)</label>
+                        <select
+                          value={rel.narrativeEmotion ?? ''}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            updateRelation(index, {
+                              ...rel,
+                              narrativeEmotion: v ? (v as TriggerEmotion) : undefined,
+                            })
+                          }}
+                          className="mt-0.5 w-full rounded-md border border-ab-border bg-ab-input px-2 py-1.5 text-[11px] text-ab-text"
+                        >
+                          <option value="">지정 안 함 (트리거 시 항상 적용)</option>
+                          {TRIGGER_EMOTION_ORDER.map((k) => (
+                            <option key={k} value={k}>
+                              {TRIGGER_EMOTION_LABEL[k]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </li>
                 )
@@ -125,9 +152,16 @@ function CharacterRelationSection({ c, allChars }: { c: Character; allChars: Cha
 }
 
 function CharacterDetail({ c, allChars }: { c: Character; allChars: Character[] }) {
+  const navigate = useNavigate()
   const [openSampleId, setOpenSampleId] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState<CharacterEditMode | null>(null)
   const patchCharacter = useMentionStore((s) => s.patchCharacter)
+  const storyNodes = useArtbookStore(useShallow((s) => s.storyNodes.filter((n) => n.projectId === c.projectId)))
+
+  const appearStoryNodes = useMemo(() => {
+    const want = new Set(c.storyNodeIds)
+    return orderedStoryNodes(c.projectId, storyNodes).filter((n) => want.has(n.id))
+  }, [c.projectId, c.storyNodeIds, storyNodes])
 
   const { sampleValues, customValues } = useMemo(() => {
     const sampleValues: CharacterValueEntry[] = []
@@ -301,12 +335,54 @@ function CharacterDetail({ c, allChars }: { c: Character; allChars: Character[] 
         onDeleteValue={(id) => patchCharacter(c.id, { values: c.values.filter((x) => x.id !== id) })}
       />
 
+      <SectionCard title="등장 서사">
+        {appearStoryNodes.length === 0 ? (
+          <p className="text-xs text-ab-sub">연결된 서사 노드가 없습니다. 서사 탭에서 등장 캐릭터로 연결해 보세요.</p>
+        ) : (
+          <ul className="space-y-2">
+            {appearStoryNodes.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/artbook?tab=story&node=${encodeURIComponent(n.id)}`)}
+                  className="w-full rounded-md border border-ab-border bg-ab-muted/25 px-3 py-2 text-left text-sm text-ab-text active:bg-ab-muted/50"
+                >
+                  <span className="text-[10px] font-semibold uppercase text-ab-sub">{n.type}</span>
+                  <span className="mt-0.5 block font-medium">{n.title}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
+
       <CharacterRelationSection c={c} allChars={allChars} />
+
+      <SectionCard title="관계 변화 기록">
+        {(c.relationTimeline ?? []).length === 0 ? (
+          <p className="text-xs text-ab-sub">이벤트 트리거로 관계가 바뀌면 여기에 쌓입니다.</p>
+        ) : (
+          <ul className="space-y-2 border-l-2 border-ab-border pl-3">
+            {(c.relationTimeline ?? []).map((entry, i) => {
+              const nt = storyNodes.find((n) => n.id === entry.storyNodeId)?.title
+              return (
+                <li key={`${entry.storyNodeId}-${i}`} className="text-xs text-ab-text">
+                  <p className="text-[10px] text-ab-sub">{nt ?? entry.storyNodeId}</p>
+                  <p className="mt-0.5 leading-relaxed">{entry.change}</p>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </SectionCard>
     </section>
   )
 }
 
 export function CharacterTab() {
+  const [searchParams] = useSearchParams()
+  const focusCharId = searchParams.get('char')
+
   const pid = useProjectStore((s) => s.currentProjectId)
   const chars = useMentionStore(
     useShallow((s) => (pid ? s.characters.filter((c) => c.projectId === pid) : [])),
@@ -326,13 +402,18 @@ export function CharacterTab() {
       return
     }
     const idSet = new Set(chars.map((c) => c.id))
+    if (focusCharId && idSet.has(focusCharId)) {
+      setSelectedIds([focusCharId])
+      setLastSoloId(focusCharId)
+      return
+    }
     setSelectedIds((prev) => {
       const valid = prev.filter((id) => idSet.has(id))
       if (valid.length > 0) return valid
       return [chars[0]!.id]
     })
     setLastSoloId((prev) => (prev && idSet.has(prev) ? prev : chars[0]!.id))
-  }, [charIdsKey, chars])
+  }, [charIdsKey, chars, focusCharId])
 
   useEffect(() => {
     if (selectedIds.length === 1) {

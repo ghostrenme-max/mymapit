@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/shallow'
 import type { MentionKind } from '../../constants/mentionKinds'
-import { MENTION_TAB_ROWS, mentionKindMeta } from '../../constants/mentionKinds'
+import { MENTION_TAB_ROWS, mentionKindMeta, storyNodeMentionChipMeta } from '../../constants/mentionKinds'
 import { useArtbookStore } from '../../stores/artbookStore'
 import { useMentionStore } from '../../stores/mentionStore'
+import type { StoryNode } from '../../stores/types'
 
 export type MentionPick = {
-  kind: MentionKind
+  type: MentionKind
   targetId: string
   name: string
+  /** 서사 노드 멘션용 Act/Scene/Event */
+  storyStructureType?: StoryNode['type']
 }
 
 type Props = {
@@ -47,31 +50,43 @@ export function MentionPopup({ projectId, filterQuery, onPick, onClose }: Props)
       case 'character':
         return characters
           .filter((c) => match(c.name))
-          .map((c) => ({ kind: 'character' as const, id: c.id, name: c.name }))
+          .map((c) => ({ type: 'character' as const, id: c.id, name: c.name, storyStructureType: undefined }))
       case 'world':
         return worldObjects
           .filter((o) => o.type === '세계' && match(o.name))
-          .map((o) => ({ kind: 'world' as const, id: o.id, name: o.name }))
+          .map((o) => ({ type: 'world' as const, id: o.id, name: o.name, storyStructureType: undefined }))
       case 'object':
         return worldObjects
           .filter((o) => o.type === '오브젝트' && match(o.name))
-          .map((o) => ({ kind: 'object' as const, id: o.id, name: o.name }))
+          .map((o) => ({ type: 'object' as const, id: o.id, name: o.name, storyStructureType: undefined }))
       case 'place':
         return worldObjects
           .filter((o) => o.type === '장소' && match(o.name))
-          .map((o) => ({ kind: 'place' as const, id: o.id, name: o.name }))
-      case 'event':
-        return storyNodes
-          .filter((n) => n.type === 'event' && match(n.title))
-          .map((n) => ({ kind: 'event' as const, id: n.id, name: n.title }))
+          .map((o) => ({ type: 'place' as const, id: o.id, name: o.name, storyStructureType: undefined }))
+      case 'storyNode': {
+        const ordered = [...storyNodes].sort((a, b) => {
+          const ta = a.type === 'act' ? 0 : a.type === 'scene' ? 1 : 2
+          const tb = b.type === 'act' ? 0 : b.type === 'scene' ? 1 : 2
+          if (ta !== tb) return ta - tb
+          return a.title.localeCompare(b.title, 'ko')
+        })
+        return ordered
+          .filter((n) => match(n.title))
+          .map((n) => ({
+            type: 'storyNode' as const,
+            id: n.id,
+            name: n.title,
+            storyStructureType: n.type,
+          }))
+      }
       case 'faction':
         return worldObjects
           .filter((o) => o.type === '세력' && match(o.name))
-          .map((o) => ({ kind: 'faction' as const, id: o.id, name: o.name }))
+          .map((o) => ({ type: 'faction' as const, id: o.id, name: o.name, storyStructureType: undefined }))
       case 'term':
         return keywords
           .filter((k) => match(k.text))
-          .map((k) => ({ kind: 'term' as const, id: k.id, name: k.text }))
+          .map((k) => ({ type: 'term' as const, id: k.id, name: k.text, storyStructureType: undefined }))
       default:
         return []
     }
@@ -120,22 +135,42 @@ export function MentionPopup({ projectId, filterQuery, onPick, onClose }: Props)
         {list.length === 0 && (
           <li className="px-3 py-4 text-center text-xs text-ab-sub">연결할 항목이 없습니다.</li>
         )}
-        {list.map((item) => (
-          <li key={`${item.kind}-${item.id}`}>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-ab-muted/60"
-              onClick={() => onPick({ kind: item.kind, targetId: item.id, name: item.name })}
-            >
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: mentionKindMeta(item.kind).color }}
-                aria-hidden
-              />
-              <span className="text-ab-text">@{item.name}</span>
-            </button>
-          </li>
-        ))}
+        {list.map((item) => {
+          const chip =
+            item.type === 'storyNode' && item.storyStructureType
+              ? storyNodeMentionChipMeta(item.storyStructureType)
+              : { color: mentionKindMeta(item.type).color, bg: mentionKindMeta(item.type).bg }
+          return (
+            <li key={`${item.type}-${item.id}`}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-ab-muted/60"
+                onClick={() =>
+                  onPick({
+                    type: item.type,
+                    targetId: item.id,
+                    name: item.name,
+                    storyStructureType: item.storyStructureType,
+                  })
+                }
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: chip.color }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 text-ab-text">
+                  {item.type === 'storyNode' && item.storyStructureType ? (
+                    <span className="text-[10px] font-semibold uppercase text-ab-sub">
+                      {item.storyStructureType}{' '}
+                    </span>
+                  ) : null}
+                  @{item.name}
+                </span>
+              </button>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

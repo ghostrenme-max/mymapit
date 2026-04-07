@@ -8,6 +8,7 @@ const DEMO: Record<MentionKind, { targetId: string; name: string }> = {
   object: { targetId: 'onb-o', name: '봉인석' },
   place: { targetId: 'onb-p', name: '북부 설원' },
   event: { targetId: 'onb-e', name: '각성' },
+  storyNode: { targetId: 'onb-sn', name: '샘플 씬' },
   faction: { targetId: 'onb-f', name: '기록관' },
   term: { targetId: 'onb-t', name: '잔향' },
 }
@@ -94,6 +95,7 @@ export function Step02Mention() {
     span.dataset.kind = tab
     span.dataset.targetId = pick.targetId
     span.dataset.targetName = pick.name
+    if (tab === 'storyNode') span.dataset.storyNodeType = 'scene'
     span.textContent = `@${pick.name}`
     range.insertNode(span)
     const nb = document.createTextNode('\u00a0')

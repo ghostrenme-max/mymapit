@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/shallow'
 import { ConceptArtSlot } from '../common/ConceptArtSlot'
 import { SectionCard } from '../common/SectionCard'
@@ -14,6 +15,10 @@ function newWoId() {
 }
 
 export function WorldTab() {
+  const [searchParams] = useSearchParams()
+  const focusWo = searchParams.get('wo')
+  const focusKw = searchParams.get('kw')
+
   const pid = useProjectStore((s) => s.currentProjectId)
   const project = useProjectStore((s) => s.getProject(pid))
   const patchProject = useProjectStore((s) => s.patchProject)
@@ -25,6 +30,9 @@ export function WorldTab() {
   )
   const objects = useMentionStore(
     useShallow((s) => (pid ? s.worldObjects.filter((o) => o.projectId === pid && o.type !== '세계') : [])),
+  )
+  const worldCore = useMentionStore(
+    useShallow((s) => (pid ? s.worldObjects.filter((o) => o.projectId === pid && o.type === '세계') : [])),
   )
 
   const [addOpen, setAddOpen] = useState(false)
@@ -64,6 +72,15 @@ export function WorldTab() {
     removeWorldObject(o.id)
   }
 
+  useEffect(() => {
+    const elId = focusWo ? `world-wo-${focusWo}` : focusKw ? `world-kw-${focusKw}` : null
+    if (!elId) return
+    const t = window.setTimeout(() => {
+      document.getElementById(elId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 120)
+    return () => window.clearTimeout(t)
+  }, [focusWo, focusKw, objects.length, keywords.length, worldCore.length])
+
   return (
     <div className="flex flex-col gap-3 px-3 pb-4 pt-2">
       <p className="text-[11px] text-ab-sub">CHAPTER 01</p>
@@ -90,12 +107,30 @@ export function WorldTab() {
         pickLabel="컨셉 아트 넣기"
       />
 
+      {worldCore.length > 0 && (
+        <SectionCard title="세계관 핵">
+          <ul className="space-y-2">
+            {worldCore.map((o) => (
+              <li
+                key={o.id}
+                id={`world-wo-${o.id}`}
+                className="rounded-sm border border-ab-border bg-ab-muted/30 px-2 py-2 scroll-mt-24"
+              >
+                <p className="text-sm font-medium text-ab-text">{o.name}</p>
+                <p className="mt-0.5 text-xs text-ab-sub">{o.description || INFO_PLACEHOLDER}</p>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      )}
+
       <SectionCard title="생태계 · 오브젝트">
         <ul className="space-y-2">
           {objects.map((o) => (
             <li
               key={o.id}
-              className="relative rounded-sm border border-ab-border bg-ab-muted/30 py-2 pl-2 pr-10"
+              id={`world-wo-${o.id}`}
+              className="relative scroll-mt-24 rounded-sm border border-ab-border bg-ab-muted/30 py-2 pl-2 pr-10"
             >
               <button
                 type="button"
@@ -123,7 +158,11 @@ export function WorldTab() {
       <SectionCard title="키워드 뱅크">
         <div className="flex flex-wrap gap-1.5">
           {keywords.map((k) => (
-            <span key={k.id} className="rounded-[2px] bg-ab-muted px-2 py-1 text-[11px]">
+            <span
+              key={k.id}
+              id={`world-kw-${k.id}`}
+              className="scroll-mt-24 rounded-[2px] bg-ab-muted px-2 py-1 text-[11px]"
+            >
               {k.text}
             </span>
           ))}

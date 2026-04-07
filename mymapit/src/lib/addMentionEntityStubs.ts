@@ -25,6 +25,7 @@ export function addCharacterStub(projectId: string, name: string): { id: string;
     quote: UNDEF,
     voiceTone: { pitch: 50, emotion: 50, speed: 50 },
     relations: [],
+    relationTimeline: [],
     values: [{ id: `val-${crypto.randomUUID().slice(0, 12)}`, theme: '서사', answer: UNDEF }],
     storyNodeIds: [],
   }

@@ -14,6 +14,8 @@ export type CharacterPatch = Partial<
     | 'voiceTone'
     | 'colors'
     | 'values'
+    | 'storyNodeIds'
+    | 'relationTimeline'
   >
 >
 

@@ -1,9 +1,11 @@
 import type { MentionKind } from '../constants/mentionKinds'
+import type { StoryNode } from '../stores/types'
 
 export type MentionReplacementPick = {
-  kind: MentionKind
+  type: MentionKind
   targetId: string
   name: string
+  storyStructureType?: StoryNode['type']
 }
 
 function makeMentionSpan(pick: MentionReplacementPick): HTMLSpanElement {
@@ -11,9 +13,12 @@ function makeMentionSpan(pick: MentionReplacementPick): HTMLSpanElement {
   span.className = 'ab-mention'
   span.contentEditable = 'false'
   span.dataset.mentionId = `men-${crypto.randomUUID()}`
-  span.dataset.kind = pick.kind
+  span.dataset.kind = pick.type
   span.dataset.targetId = pick.targetId
   span.dataset.targetName = pick.name
+  if (pick.type === 'storyNode' && pick.storyStructureType) {
+    span.dataset.storyNodeType = pick.storyStructureType
+  }
   span.textContent = `@${pick.name}`
   return span
 }

@@ -47,6 +47,11 @@ export function ArtBookScreen() {
         const p = new URLSearchParams(prev)
         p.set('tab', key)
         if (key !== 'story') p.delete('node')
+        if (key !== 'character') p.delete('char')
+        if (key !== 'world') {
+          p.delete('wo')
+          p.delete('kw')
+        }
         return p
       },
       { replace: true },

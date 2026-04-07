@@ -10,6 +10,7 @@ import {
   seedMemos,
   seedMemoGroups,
   seedProject,
+  seedRelationTriggers,
   seedStory,
   seedWorldObjects,
 } from './seedData'
@@ -30,7 +31,7 @@ export function loadDemoWorld() {
   })
   useMemoStore.getState().setMemoState(seedMemoGroups, seedMemos)
   useMentionStore.getState().setMentionEntities(seedChars, seedWorldObjects)
-  useArtbookStore.getState().setArtbookData(seedStory, seedKw)
+  useArtbookStore.getState().setArtbookData(seedStory, seedKw, seedRelationTriggers)
   useUserStore.setState({ onboardingCompleted: true })
 }
 
@@ -92,6 +93,11 @@ export function addProjectFromAnswers(a: QuestionAnswers) {
     parentId: null,
     order: 0,
     characterIds: [] as string[],
+    emotionTag: null,
+    isBranch: false,
+    branchLabel: null,
+    activeBranchId: null,
+    linkedMemoIds: [] as string[],
   }
   const c1 = {
     id: newId('ch'),
@@ -108,6 +114,7 @@ export function addProjectFromAnswers(a: QuestionAnswers) {
     quote: '이야기는 이제 막 시작됐다.',
     voiceTone: { pitch: 50, emotion: 50, speed: 50 },
     relations: [],
+    relationTimeline: [],
     values: [
       {
         id: `val-${crypto.randomUUID().slice(0, 12)}`,

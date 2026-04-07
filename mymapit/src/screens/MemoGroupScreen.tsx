@@ -217,7 +217,7 @@ export function MemoGroupScreen() {
                 <li className="px-2 py-6 text-center text-sm text-ab-sub">이 그룹 메모에 @가 없습니다.</li>
               ) : (
                 uniqueMentionsInGroup.map((men) => {
-                  const mm = mentionKindMeta(men.kind)
+                  const mm = mentionKindMeta(men.type)
                   return (
                     <li key={men.targetId} className="mb-1">
                       <button

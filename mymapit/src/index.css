@@ -193,6 +193,21 @@ body {
   color: #7a6b3a;
 }
 
+.ab-mention[data-kind='storyNode'][data-story-node-type='act'] {
+  background-color: rgba(229, 62, 62, 0.14);
+  color: #e53e3e;
+}
+
+.ab-mention[data-kind='storyNode'][data-story-node-type='scene'] {
+  background-color: rgba(49, 130, 206, 0.14);
+  color: #3182ce;
+}
+
+.ab-mention[data-kind='storyNode'][data-story-node-type='event'] {
+  background-color: rgba(128, 90, 213, 0.14);
+  color: #805ad5;
+}
+
 .ab-mention-snap-active {
   outline: 2px solid var(--color-ab-text);
   outline-offset: 2px;

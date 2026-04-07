@@ -1,4 +1,10 @@
 import { create } from 'zustand'
+import { normalizeMemoMentions } from '../lib/normalizeMemoMention'
+import {
+  detachMemoFromAllStoryNodes,
+  rebuildAllStoryNodeMemoLinks,
+  syncStoryNodeLinksForMemo,
+} from '../lib/storyNodeMemoLinks'
 import { scheduleSyncAfterMemoMutation } from '../lib/syncArtbookFromMemos'
 import type { Memo, MemoContentSnapshot, MemoGroup } from './types'
 
@@ -68,12 +74,16 @@ export const useMemoStore = create<State>((set, get) => ({
               ...m,
               ...patch,
               updatedAt: new Date().toISOString(),
+              ...(patch.mentions != null ? { mentions: normalizeMemoMentions(patch.mentions) } : {}),
             }
           : m,
       ),
     }))
     const m = get().memos.find((x) => x.id === id)
-    if (m) scheduleSyncAfterMemoMutation(m.groupId)
+    if (m) {
+      syncStoryNodeLinksForMemo(id)
+      scheduleSyncAfterMemoMutation(m.groupId)
+    }
   },
 
   pushMemoContentSnapshot: (memoId, snap) => {
@@ -106,6 +116,7 @@ export const useMemoStore = create<State>((set, get) => ({
   deleteMemo: (id) => {
     const m = get().memos.find((x) => x.id === id)
     const gid = m?.groupId
+    detachMemoFromAllStoryNodes(id)
     set((s) => ({ memos: s.memos.filter((x) => x.id !== id) }))
     if (gid) scheduleSyncAfterMemoMutation(gid)
   },
@@ -113,6 +124,8 @@ export const useMemoStore = create<State>((set, get) => ({
   deleteMemoGroup: (id) => {
     const g = get().memoGroups.find((x) => x.id === id)
     const pid = g?.projectId
+    const toRemove = get().memos.filter((m) => m.groupId === id)
+    for (const m of toRemove) detachMemoFromAllStoryNodes(m.id)
     set((s) => ({
       memoGroups: s.memoGroups.filter((x) => x.id !== id),
       memos: s.memos.filter((m) => m.groupId !== id),
@@ -120,7 +133,18 @@ export const useMemoStore = create<State>((set, get) => ({
     if (pid) scheduleSyncAfterMemoMutation(undefined, pid)
   },
 
-  setMemoState: (memoGroups, memos) => set({ memoGroups, memos }),
+  setMemoState: (memoGroups, memos) => {
+    const normalized = memos.map((m) => ({
+      ...m,
+      mentions: normalizeMemoMentions(m.mentions),
+      contentSnapshots: m.contentSnapshots?.map((snap) => ({
+        ...snap,
+        mentions: normalizeMemoMentions(snap.mentions),
+      })),
+    }))
+    set({ memoGroups, memos: normalized })
+    queueMicrotask(() => rebuildAllStoryNodeMemoLinks())
+  },
 
   resetMemos: () => set({ memoGroups: [], memos: [] }),
 }))

@@ -9,9 +9,11 @@ export function isMentionResolvedInProject(
   keywords: Keyword[],
   storyNodes: StoryNode[],
 ): boolean {
-  switch (mention.kind) {
+  switch (mention.type) {
     case 'character':
       return characters.some((c) => c.id === mention.targetId && c.projectId === projectId)
+    case 'storyNode':
+      return storyNodes.some((n) => n.id === mention.targetId && n.projectId === projectId)
     case 'event':
       return storyNodes.some(
         (n) => n.id === mention.targetId && n.projectId === projectId && n.type === 'event',

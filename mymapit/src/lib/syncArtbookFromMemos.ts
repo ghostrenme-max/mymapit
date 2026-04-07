@@ -1,3 +1,4 @@
+import { emptyStoryNodeMeta } from './storyNodeDefaults'
 import { clampStoryMetric } from './storyMetrics'
 import { stripMemoHtml } from '../utils/memoHtml'
 import { DEMO_PID } from '../stores/seedData'
@@ -8,7 +9,7 @@ import type { Character, Keyword, MentionKind, StoryNode, WorldObject } from '..
 
 export const INFO_PLACEHOLDER = '정보 미정'
 
-function kindToWorldType(kind: MentionKind): string {
+function kindToWorldType(kind: MentionKind | string): string {
   switch (kind) {
     case 'world':
       return '세계'
@@ -20,6 +21,8 @@ function kindToWorldType(kind: MentionKind): string {
       return '사건'
     case 'faction':
       return '세력'
+    case 'storyNode':
+      return '서사'
     case 'term':
       return '용어'
     default:
@@ -49,6 +52,7 @@ function createStubCharacter(projectId: string, id: string, name: string): Chara
     quote: INFO_PLACEHOLDER,
     voiceTone: { pitch: 50, emotion: 50, speed: 50 },
     relations: [],
+    relationTimeline: [],
     values: [{ id: `val-${crypto.randomUUID().slice(0, 12)}`, theme: '서사', answer: INFO_PLACEHOLDER }],
     storyNodeIds: [],
   }
@@ -99,6 +103,7 @@ export function syncArtbookFromMemos(projectId: string) {
 
     const actT = clampStoryMetric((4 + (actIndex % 5)) * 2)
     nodes.push({
+      ...emptyStoryNodeMeta(),
       id: actId,
       projectId,
       type: 'act',
@@ -120,14 +125,15 @@ export function syncArtbookFromMemos(projectId: string) {
       const desc = plain.slice(0, 160) || INFO_PLACEHOLDER
       const title = (memo.title || '').trim() || INFO_PLACEHOLDER
 
-      const memoCharIds = [...new Set(memo.mentions.filter((x) => x.kind === 'character').map((x) => x.targetId))]
+      const memoCharIds = [...new Set(memo.mentions.filter((x) => x.type === 'character').map((x) => x.targetId))]
       const actIdRef = actId
-      for (const ch of memo.mentions.filter((x) => x.kind === 'character')) {
+      for (const ch of memo.mentions.filter((x) => x.type === 'character')) {
         registerCharStory(ch.targetId, [actIdRef, sceneId, evId])
       }
 
       const scT = clampStoryMetric((5 + (memoIndex % 4)) * 2)
       nodes.push({
+        ...emptyStoryNodeMeta(),
         id: sceneId,
         projectId,
         type: 'scene',
@@ -142,6 +148,7 @@ export function syncArtbookFromMemos(projectId: string) {
       })
       const evT = clampStoryMetric((6 + (memoIndex % 3)) * 2)
       nodes.push({
+        ...emptyStoryNodeMeta(),
         id: evId,
         projectId,
         type: 'event',
@@ -160,6 +167,7 @@ export function syncArtbookFromMemos(projectId: string) {
       const sceneId = `memo-scene-empty-${g.id}`
       const evId = `memo-ev-empty-${g.id}`
       nodes.push({
+        ...emptyStoryNodeMeta(),
         id: sceneId,
         projectId,
         type: 'scene',
@@ -173,6 +181,7 @@ export function syncArtbookFromMemos(projectId: string) {
         characterIds: [],
       })
       nodes.push({
+        ...emptyStoryNodeMeta(),
         id: evId,
         projectId,
         type: 'event',
@@ -195,6 +204,7 @@ export function syncArtbookFromMemos(projectId: string) {
     const sceneId = `memo-scene-empty-proj-${projectId}`
     const evId = `memo-ev-empty-proj-${projectId}`
     nodes.push({
+      ...emptyStoryNodeMeta(),
       id: actId,
       projectId,
       type: 'act',
@@ -208,6 +218,7 @@ export function syncArtbookFromMemos(projectId: string) {
       characterIds: [],
     })
     nodes.push({
+      ...emptyStoryNodeMeta(),
       id: sceneId,
       projectId,
       type: 'scene',
@@ -221,6 +232,7 @@ export function syncArtbookFromMemos(projectId: string) {
       characterIds: [],
     })
     nodes.push({
+      ...emptyStoryNodeMeta(),
       id: evId,
       projectId,
       type: 'event',
@@ -252,7 +264,7 @@ export function syncArtbookFromMemos(projectId: string) {
   }
 
   const mentions = projectMemos.flatMap((m) => m.mentions)
-  const mentionCharIds = new Set(mentions.filter((x) => x.kind === 'character').map((x) => x.targetId))
+  const mentionCharIds = new Set(mentions.filter((x) => x.type === 'character').map((x) => x.targetId))
 
   const { characters: allChars, worldObjects: allWo } = useMentionStore.getState()
   const existingChars = allChars.filter((c) => c.projectId === projectId)
@@ -265,28 +277,32 @@ export function syncArtbookFromMemos(projectId: string) {
       return {
         ...c,
         storyNodeIds: [...new Set(storyIdsForChar.get(c.id) ?? [])],
+        relationTimeline: c.relationTimeline ?? [],
       }
     }
     return {
       ...c,
       storyNodeIds: c.storyNodeIds.filter((id) => newNodeIdSet.has(id)),
+      relationTimeline: c.relationTimeline ?? [],
     }
   })
 
   const charIds = new Set(mergedChars.map((c) => c.id))
   for (const men of mentions) {
-    if (men.kind !== 'character') continue
+    if (men.type !== 'character') continue
     if (charIds.has(men.targetId)) continue
     const stub = createStubCharacter(projectId, men.targetId, men.targetName)
     stub.storyNodeIds = [...new Set(storyIdsForChar.get(men.targetId) ?? [])]
+    stub.relationTimeline = []
     mergedChars.push(stub)
     charIds.add(men.targetId)
   }
 
   const mergedWoMap = new Map(existingWo.map((o) => [o.id, { ...o }]))
   for (const men of mentions) {
-    if (men.kind === 'character') continue
-    const typ = kindToWorldType(men.kind)
+    if (men.type === 'character') continue
+    if (men.type === 'storyNode') continue
+    const typ = kindToWorldType(men.type)
     if (!mergedWoMap.has(men.targetId)) {
       mergedWoMap.set(
         men.targetId,

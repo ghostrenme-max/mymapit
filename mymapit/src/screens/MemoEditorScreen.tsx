@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useBlocker, useNavigate, useParams } from 'react-router-dom'
+import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { MentionPopup, type MentionPick } from '../components/memo/MentionPopup'
 import { TajiPanel } from '../components/memo/TajiPanel'
 import { isMentionKind, legacyDatasetTypeToKind } from '../constants/mentionKinds'
 import { getPlainTextBeforeCaret } from '../lib/editorPlainText'
+import { buildStoryNodeMentionHtml } from '../lib/storyNodeMentionHtml'
 import { extractTextFromFile, plainTextToEditorHtml } from '../lib/plainTextImport'
 import { BulkMentionPanel } from '../components/memo/BulkMentionPanel'
 import { MemoSnapshotSheet } from '../components/memo/MemoSnapshotSheet'
@@ -15,7 +16,8 @@ import {
 } from '../lib/exportMemoText'
 import { useMemoStore } from '../stores/memoStore'
 import { useProjectStore } from '../stores/projectStore'
-import type { MemoContentSnapshot, Mention, MentionKind } from '../stores/types'
+import type { MemoContentSnapshot, Mention } from '../stores/types'
+import type { MentionKind } from '../constants/mentionKinds'
 import { useUserStore } from '../stores/userStore'
 
 function getCaretOffsetWithin(root: HTMLElement): number {
@@ -75,16 +77,21 @@ function parseMentionsFromEditor(root: HTMLElement): Mention[] {
     const targetId = span.dataset.targetId ?? ''
     const targetName = span.dataset.targetName ?? ''
     const id = span.dataset.mentionId ?? `men-${i}`
-    if (kind && targetId && targetName) out.push({ id, kind, targetId, targetName })
+    if (kind && targetId && targetName) out.push({ id, type: kind, targetId, targetName })
   })
   return out
 }
 
 type MemoBaseline = { title: string; content: string; mentions: Mention[] }
 
+type InsertStoryNodeState = {
+  insertStoryNode?: { id: string; name: string; nodeType: 'act' | 'scene' | 'event' }
+}
+
 export function MemoEditorScreen() {
   const { groupId, memoId } = useParams<{ groupId: string; memoId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const titleRef = useRef('')
   const editorRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
@@ -123,14 +130,40 @@ export function MemoEditorScreen() {
     if (!memoId || !editorRef.current) return
     const m = useMemoStore.getState().memos.find((x) => x.id === memoId)
     if (!m) return
+    const st = (location.state ?? null) as InsertStoryNodeState | null
+    const ins = st?.insertStoryNode
+    const editor = editorRef.current
+
     setTitle(m.title)
-    editorRef.current.innerHTML = m.content || ''
+    editor.innerHTML = m.content || ''
+
+    if (
+      ins &&
+      !editor.querySelector(`[data-kind="storyNode"][data-target-id="${CSS.escape(ins.id)}"]`)
+    ) {
+      const mid = `men-${crypto.randomUUID().slice(0, 12)}`
+      editor.insertAdjacentHTML(
+        'beforeend',
+        buildStoryNodeMentionHtml({ id: ins.id, title: ins.name, type: ins.nodeType }, mid) + '\u00a0',
+      )
+      const content = editor.innerHTML
+      const mentions = parseMentionsFromEditor(editor)
+      updateMemo(memoId, { content, mentions })
+      navigate(location.pathname, { replace: true, state: {} })
+      baselineRef.current = {
+        title: m.title,
+        content,
+        mentions,
+      }
+      return
+    }
+
     baselineRef.current = {
       title: m.title,
       content: m.content || '',
       mentions: [...m.mentions],
     }
-  }, [memoId])
+  }, [memoId, location.state, location.pathname, navigate, updateMemo])
 
   const pushPreEditSnapshot = useCallback(
     (label: string) => {
@@ -342,7 +375,7 @@ export function MemoEditorScreen() {
     if (kind && targetId && targetName) {
       const all = parseMentionsFromEditor(root)
       setSameMemoSnap(all.filter((m) => m.targetId !== targetId))
-      setPanelMention({ id, kind, targetId, targetName })
+      setPanelMention({ id, type: kind, targetId, targetName })
     }
   }
 
@@ -374,9 +407,12 @@ export function MemoEditorScreen() {
     span.className = 'ab-mention'
     span.contentEditable = 'false'
     span.dataset.mentionId = mid
-    span.dataset.kind = pick.kind
+    span.dataset.kind = pick.type
     span.dataset.targetId = pick.targetId
     span.dataset.targetName = pick.name
+    if (pick.type === 'storyNode' && pick.storyStructureType) {
+      span.dataset.storyNodeType = pick.storyStructureType
+    }
     span.textContent = `@${pick.name}`
 
     r.deleteContents()

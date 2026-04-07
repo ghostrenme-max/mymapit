@@ -1,11 +1,12 @@
 import type { CharacterRelationKind } from '../constants/characterRelationKinds'
 import type { MentionKind } from '../constants/mentionKinds'
+import type { StoryEmotionTag, TriggerEmotion } from '../constants/storyNarrative'
 
-export type { CharacterRelationKind, MentionKind }
+export type { CharacterRelationKind, MentionKind, StoryEmotionTag, TriggerEmotion }
 
 export type Mention = {
   id: string
-  kind: MentionKind
+  type: MentionKind
   targetId: string
   targetName: string
 }
@@ -101,6 +102,16 @@ export type StoryNode = {
   parentId: string | null
   order: number
   characterIds: string[]
+  /** 감정 온도 태그 (단일) */
+  emotionTag: StoryEmotionTag | null
+  /** Event 분기 루트 여부 */
+  isBranch: boolean
+  /** 분기 선택지 설명 (자식 이벤트에 표시) */
+  branchLabel: string | null
+  /** 활성 분기 자식 이벤트 id */
+  activeBranchId: string | null
+  /** 이 노드를 태깅한 메모 id */
+  linkedMemoIds: string[]
 }
 
 export type CharacterRelation = {
@@ -109,6 +120,24 @@ export type CharacterRelation = {
   kind: CharacterRelationKind
   /** 한 줄 감정·상세 메모 */
   emotion: string
+  /** 관계 트리거 매칭용 감정 축 (없으면 트리거의 from 검증 생략 후 적용) */
+  narrativeEmotion?: TriggerEmotion
+}
+
+/** 이벤트 노드에서 관계 변화를 일으키는 트리거 */
+export type RelationTrigger = {
+  id: string
+  eventNodeId: string
+  characterAId: string
+  characterBId: string
+  fromEmotion: TriggerEmotion
+  toEmotion: TriggerEmotion
+  activated: boolean
+}
+
+export type RelationTimelineEntry = {
+  storyNodeId: string
+  change: string
 }
 
 export type CharacterValueEntry = {
@@ -136,6 +165,8 @@ export type Character = {
   relations: CharacterRelation[]
   values: CharacterValueEntry[]
   storyNodeIds: string[]
+  /** 이벤트 트리거 등으로 기록된 관계 변화 요약 */
+  relationTimeline: RelationTimelineEntry[]
 }
 
 export type Keyword = {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/shallow'
-import { MENTION_TAB_ROWS, mentionKindMeta } from '../../constants/mentionKinds'
+import { MENTION_TAB_ROWS, mentionKindMeta, storyNodeMentionChipMeta } from '../../constants/mentionKinds'
 import { effectiveRelaxation, effectiveTension } from '../../lib/storyMetrics'
 import { useArtbookStore } from '../../stores/artbookStore'
 import { useMentionStore } from '../../stores/mentionStore'
@@ -55,13 +55,28 @@ export function TajiPanel({
   const storyNodes = useArtbookStore(useShallow((s) => s.storyNodes))
   const keywords = useArtbookStore((s) => s.keywords)
 
-  const meta = mention ? mentionKindMeta(mention.kind) : null
+  const meta = mention
+    ? mention.type === 'storyNode'
+      ? (() => {
+          const n = storyNodes.find((x) => x.id === mention.targetId)
+          const chip = n ? storyNodeMentionChipMeta(n.type) : storyNodeMentionChipMeta('event')
+          return {
+            kind: 'storyNode' as const,
+            label: '서사',
+            hueName: '서사',
+            color: chip.color,
+            bg: chip.bg,
+            meaning: '막·씬·이벤트',
+          }
+        })()
+      : mentionKindMeta(mention.type)
+    : null
 
   const detail = useMemo(() => {
     if (!mention) return null
-    const { kind, targetId, targetName } = mention
+    const { type, targetId, targetName } = mention
 
-    if (kind === 'character') {
+    if (type === 'character') {
       const c = characters.find((x) => x.id === targetId)
       if (!c)
         return {
@@ -88,7 +103,7 @@ export function TajiPanel({
       }
     }
 
-    if (kind === 'event') {
+    if (type === 'event' || type === 'storyNode') {
       const n = storyNodes.find((x) => x.id === targetId)
       const storyLinks: StoryLink[] =
         n ? [{ id: n.id, title: n.title }] : []
@@ -104,7 +119,7 @@ export function TajiPanel({
       }
     }
 
-    if (kind === 'term') {
+    if (type === 'term') {
       const k = keywords.find((x) => x.id === targetId)
       return {
         title: k?.text ?? targetName,
@@ -119,7 +134,7 @@ export function TajiPanel({
     const o = worldObjects.find((x) => x.id === targetId)
     return {
       title: o?.name ?? targetName,
-      role: o?.type ?? kind,
+      role: o?.type ?? type,
       body: o?.description ?? '항목 정보 없음',
       tags: o?.tags ?? [],
       storyLinks: [] as StoryLink[],
@@ -256,7 +271,14 @@ export function TajiPanel({
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {sameMemoMentions.map((m) => {
-                    const mm = mentionKindMeta(m.kind)
+                    const mm =
+                      m.type === 'storyNode'
+                        ? (() => {
+                            const node = storyNodes.find((x) => x.id === m.targetId)
+                            const chip = node ? storyNodeMentionChipMeta(node.type) : storyNodeMentionChipMeta('event')
+                            return { color: chip.color, bg: chip.bg, label: '서사' }
+                          })()
+                        : mentionKindMeta(m.type)
                     return (
                       <span
                         key={m.id}

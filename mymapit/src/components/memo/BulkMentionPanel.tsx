@@ -22,11 +22,11 @@ type Props = {
   onBeforeApply?: () => void
 }
 
-const WO_TYPES: { label: string; type: string; kind: MentionKind }[] = [
-  { label: '세계관', type: '세계', kind: 'world' },
-  { label: '오브젝트', type: '오브젝트', kind: 'object' },
-  { label: '장소', type: '장소', kind: 'place' },
-  { label: '세력', type: '세력', kind: 'faction' },
+const WO_TYPES: { label: string; type: string; mentionType: MentionKind }[] = [
+  { label: '세계관', type: '세계', mentionType: 'world' },
+  { label: '오브젝트', type: '오브젝트', mentionType: 'object' },
+  { label: '장소', type: '장소', mentionType: 'place' },
+  { label: '세력', type: '세력', mentionType: 'faction' },
 ]
 
 export function BulkMentionPanel({
@@ -72,31 +72,37 @@ export function BulkMentionPanel({
       case 'character':
         return characters
           .filter((c) => match(c.name))
-          .map((c) => ({ kind: 'character' as const, id: c.id, name: c.name }))
+          .map((c) => ({ type: 'character' as const, id: c.id, name: c.name, storyStructureType: undefined as undefined }))
       case 'world':
         return worldObjects
           .filter((o) => o.type === '세계' && match(o.name))
-          .map((o) => ({ kind: 'world' as const, id: o.id, name: o.name }))
+          .map((o) => ({ type: 'world' as const, id: o.id, name: o.name, storyStructureType: undefined as undefined }))
       case 'object':
         return worldObjects
           .filter((o) => o.type === '오브젝트' && match(o.name))
-          .map((o) => ({ kind: 'object' as const, id: o.id, name: o.name }))
+          .map((o) => ({ type: 'object' as const, id: o.id, name: o.name, storyStructureType: undefined as undefined }))
       case 'place':
         return worldObjects
           .filter((o) => o.type === '장소' && match(o.name))
-          .map((o) => ({ kind: 'place' as const, id: o.id, name: o.name }))
-      case 'event':
-        return storyNodes
-          .filter((n) => n.type === 'event' && match(n.title))
-          .map((n) => ({ kind: 'event' as const, id: n.id, name: n.title }))
+          .map((o) => ({ type: 'place' as const, id: o.id, name: o.name, storyStructureType: undefined as undefined }))
+      case 'storyNode':
+        return [...storyNodes]
+          .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
+          .filter((n) => match(n.title))
+          .map((n) => ({
+            type: 'storyNode' as const,
+            id: n.id,
+            name: n.title,
+            storyStructureType: n.type,
+          }))
       case 'faction':
         return worldObjects
           .filter((o) => o.type === '세력' && match(o.name))
-          .map((o) => ({ kind: 'faction' as const, id: o.id, name: o.name }))
+          .map((o) => ({ type: 'faction' as const, id: o.id, name: o.name, storyStructureType: undefined as undefined }))
       case 'term':
         return keywords
           .filter((k) => match(k.text))
-          .map((k) => ({ kind: 'term' as const, id: k.id, name: k.text }))
+          .map((k) => ({ type: 'term' as const, id: k.id, name: k.text, storyStructureType: undefined as undefined }))
       default:
         return []
     }
@@ -119,15 +125,15 @@ export function BulkMentionPanel({
     const name = (displayName.trim() || matchTerm.trim())
     if (!name) return
     const { id, name: nm } = addCharacterStub(projectId, name)
-    applyPick({ kind: 'character', targetId: id, name: nm })
+    applyPick({ type: 'character', targetId: id, name: nm })
   }
 
-  const quickNewWorldObject = (type: string, kind: MentionKind) => {
+  const quickNewWorldObject = (type: string, mentionType: MentionKind) => {
     if (!projectId) return
     const name = (displayName.trim() || matchTerm.trim())
     if (!name) return
     const { id, name: nm } = addWorldObjectStub(projectId, name, type)
-    applyPick({ kind, targetId: id, name: nm })
+    applyPick({ type: mentionType, targetId: id, name: nm })
   }
 
   const quickNewKeyword = () => {
@@ -135,7 +141,7 @@ export function BulkMentionPanel({
     const name = (displayName.trim() || matchTerm.trim())
     if (!name) return
     const { id, name: nm } = addKeywordStub(projectId, name)
-    applyPick({ kind: 'term', targetId: id, name: nm })
+    applyPick({ type: 'term', targetId: id, name: nm })
   }
 
   return (
@@ -204,15 +210,22 @@ export function BulkMentionPanel({
             <li className="py-3 text-center text-[11px] text-ab-sub">목록이 비었습니다. 아래에서 새로 만들 수 있어요.</li>
           )}
           {list.map((item) => (
-            <li key={`${item.kind}-${item.id}`}>
+            <li key={`${item.type}-${item.id}`}>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-2 py-2 text-left text-sm hover:bg-ab-muted/60"
-                onClick={() => applyPick({ kind: item.kind, targetId: item.id, name: item.name })}
+                onClick={() =>
+                  applyPick({
+                    type: item.type,
+                    targetId: item.id,
+                    name: item.name,
+                    storyStructureType: item.storyStructureType,
+                  })
+                }
               >
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: mentionKindMeta(item.kind).color }}
+                  style={{ backgroundColor: mentionKindMeta(item.type).color }}
                   aria-hidden
                 />
                 <span>@{item.name}</span>
@@ -235,7 +248,7 @@ export function BulkMentionPanel({
             <button
               key={w.type}
               type="button"
-              onClick={() => quickNewWorldObject(w.type, w.kind)}
+              onClick={() => quickNewWorldObject(w.type, w.mentionType)}
               disabled={!projectId}
               className="rounded-sm border border-ab-border bg-ab-card px-2 py-1.5 text-[10px] font-medium text-ab-text disabled:opacity-40"
             >

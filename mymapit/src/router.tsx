@@ -11,11 +11,13 @@ import { QuestionFlowScreen } from './screens/QuestionFlowScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { SplashScreen } from './screens/SplashScreen'
 import { SuccessScreen } from './screens/SuccessScreen'
+import { ToastHost } from './components/common/ToastHost'
 
 function AppShell() {
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[390px] flex-1 flex-col bg-ab-bg">
       <Outlet />
+      <ToastHost />
     </div>
   )
 }

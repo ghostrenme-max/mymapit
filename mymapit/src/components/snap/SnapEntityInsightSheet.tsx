@@ -39,6 +39,9 @@ export function SnapEntityInsightSheet({ open, projectId, kind, targetId, label,
           lines: [{ k: '상태', v: '아트북에 카드가 없습니다.' }],
           storyNodeId: undefined as string | undefined,
         }
+      const linkedStory = c.storyNodeIds?.[0]
+      const storyNodeId =
+        linkedStory && storyNodes.some((n) => n.id === linkedStory) ? linkedStory : undefined
       return {
         title: c.name,
         subtitle: `캐릭터 · ${c.role}`,
@@ -49,10 +52,10 @@ export function SnapEntityInsightSheet({ open, projectId, kind, targetId, label,
           { k: '좋아함', v: c.likes || INFO_PLACEHOLDER },
           { k: '싫어함', v: c.dislikes || INFO_PLACEHOLDER },
         ],
-        storyNodeId: undefined as string | undefined,
+        storyNodeId,
       }
     }
-    if (kind === 'event') {
+    if (kind === 'event' || kind === 'storyNode') {
       const n = storyNodes.find((x) => x.id === targetId)
       const te = n ? effectiveTension(n) : null
       const re = n ? effectiveRelaxation(n) : null
@@ -95,17 +98,39 @@ export function SnapEntityInsightSheet({ open, projectId, kind, targetId, label,
     for (const m of memos) {
       if (!gids.has(m.groupId)) continue
       const list = effectiveMemoMentions(m.content, m.mentions)
-      if (list.some((x) => x.targetId === targetId && x.kind === kind)) {
+      if (list.some((x) => x.targetId === targetId && x.type === kind)) {
         titles.push(m.title.trim() || '(제목 없음)')
       }
     }
     return titles.slice(0, 14)
   }, [memos, memoGroups, targetId, kind])
 
-  const goStory = () => {
-    if (!detail.storyNodeId) return
+  const goWorld = () => {
     onClose()
-    navigate(`/artbook?tab=story&node=${encodeURIComponent(detail.storyNodeId)}`)
+    if (kind === 'term') {
+      navigate(`/artbook?tab=world&kw=${encodeURIComponent(targetId)}`)
+      return
+    }
+    if (kind === 'world' || kind === 'object' || kind === 'place' || kind === 'faction') {
+      navigate(`/artbook?tab=world&wo=${encodeURIComponent(targetId)}`)
+      return
+    }
+    navigate('/artbook?tab=world')
+  }
+
+  const goCharacter = () => {
+    if (kind !== 'character') return
+    onClose()
+    navigate(`/artbook?tab=character&char=${encodeURIComponent(targetId)}`)
+  }
+
+  const goStory = () => {
+    onClose()
+    if (detail.storyNodeId) {
+      navigate(`/artbook?tab=story&node=${encodeURIComponent(detail.storyNodeId)}`)
+    } else {
+      navigate('/artbook?tab=story')
+    }
   }
 
   if (!open) return null
@@ -132,9 +157,7 @@ export function SnapEntityInsightSheet({ open, projectId, kind, targetId, label,
           <p className="mt-0.5 text-xs text-ab-sub">{detail.subtitle}</p>
         </div>
         <div className="max-h-[min(52vh,360px)] overflow-y-auto px-4 py-3">
-          <p className="mb-2 text-[10px] font-semibold text-ab-sub">
-            아트북·메모에서 모은 요약 (기존 @@ 자리 — AI 없이 구조화)
-          </p>
+          <p className="mb-2 text-[10px] font-semibold text-ab-sub">아트북·메모에서 모은 요약</p>
           <ul className="space-y-2.5">
             {detail.lines.map((row) => (
               <li key={row.k} className="rounded-md border border-ab-border/80 bg-ab-muted/30 px-3 py-2">
@@ -155,15 +178,30 @@ export function SnapEntityInsightSheet({ open, projectId, kind, targetId, label,
               </ul>
             </div>
           )}
-          {kind === 'event' && detail.storyNodeId && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={goWorld}
+              className="min-w-0 flex-1 basis-[30%] rounded-md border border-ab-border bg-ab-muted/50 py-2.5 text-xs font-semibold text-ab-text active:bg-ab-muted sm:text-sm"
+            >
+              세계관 ›
+            </button>
+            <button
+              type="button"
+              onClick={goCharacter}
+              disabled={kind !== 'character'}
+              className="min-w-0 flex-1 basis-[30%] rounded-md border border-ab-border bg-ab-muted/50 py-2.5 text-xs font-semibold text-ab-text active:bg-ab-muted disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
+            >
+              캐릭터 ›
+            </button>
             <button
               type="button"
               onClick={goStory}
-              className="mt-4 w-full rounded-md border border-ab-border bg-ab-muted/50 py-2.5 text-sm font-medium text-ab-text active:bg-ab-muted"
+              className="min-w-0 flex-1 basis-[30%] rounded-md border border-ab-border bg-ab-muted/50 py-2.5 text-xs font-semibold text-ab-text active:bg-ab-muted sm:text-sm"
             >
-              서사 탭에서 노드 열기
+              서사 ›
             </button>
-          )}
+          </div>
         </div>
         <button
           type="button"

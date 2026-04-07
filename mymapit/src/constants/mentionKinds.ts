@@ -7,6 +7,7 @@ export type MentionKind =
   | 'event'
   | 'faction'
   | 'term'
+  | 'storyNode'
 
 export const MENTION_TAB_ROWS: {
   kind: MentionKind
@@ -51,12 +52,12 @@ export const MENTION_TAB_ROWS: {
     meaning: '공간, 지형',
   },
   {
-    kind: 'event',
-    label: '사건',
-    hueName: '버건디',
-    color: '#7A2C3A',
-    bg: 'rgba(122,44,58,0.12)',
-    meaning: '긴장, 역사',
+    kind: 'storyNode',
+    label: '서사',
+    hueName: '바이올렛',
+    color: '#805AD5',
+    bg: 'rgba(128,90,213,0.12)',
+    meaning: '막·씬·이벤트',
   },
   {
     kind: 'faction',
@@ -76,7 +77,22 @@ export const MENTION_TAB_ROWS: {
   },
 ]
 
-const KIND_SET = new Set<MentionKind>(MENTION_TAB_ROWS.map((r) => r.kind))
+/** 탭에 안 올라가지만 HTML에 남을 수 있는 종류 */
+const LEGACY_TAB_META: Record<'event', (typeof MENTION_TAB_ROWS)[number]> = {
+  event: {
+    kind: 'event',
+    label: '사건(구)',
+    hueName: '버건디',
+    color: '#7A2C3A',
+    bg: 'rgba(122,44,58,0.12)',
+    meaning: '긴장, 역사',
+  },
+}
+
+const KIND_SET = new Set<MentionKind>([
+  ...MENTION_TAB_ROWS.map((r) => r.kind),
+  'event',
+])
 
 export function isMentionKind(v: string | undefined): v is MentionKind {
   return !!v && KIND_SET.has(v as MentionKind)
@@ -89,5 +105,22 @@ export function legacyDatasetTypeToKind(t: string | undefined): MentionKind | nu
 }
 
 export function mentionKindMeta(kind: MentionKind) {
-  return MENTION_TAB_ROWS.find((r) => r.kind === kind) ?? MENTION_TAB_ROWS[0]!
+  const row = MENTION_TAB_ROWS.find((r) => r.kind === kind)
+  if (row) return row
+  if (kind === 'event') return LEGACY_TAB_META.event
+  return MENTION_TAB_ROWS[0]!
+}
+
+/** Act / Scene / Event 노드 멘션 칩 (본문 태그 색) */
+export function storyNodeMentionChipMeta(nodeType: 'act' | 'scene' | 'event') {
+  switch (nodeType) {
+    case 'act':
+      return { color: '#E53E3E', bg: 'rgba(229,62,62,0.14)' }
+    case 'scene':
+      return { color: '#3182CE', bg: 'rgba(49,130,206,0.14)' }
+    case 'event':
+      return { color: '#805AD5', bg: 'rgba(128,90,213,0.14)' }
+    default:
+      return { color: '#805AD5', bg: 'rgba(128,90,213,0.14)' }
+  }
 }

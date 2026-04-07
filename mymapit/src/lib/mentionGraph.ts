@@ -20,7 +20,7 @@ export type GraphEdge = {
 }
 
 function nodeKey(m: Mention): string {
-  return `${m.kind}:${m.targetId}`
+  return `${m.type}:${m.targetId}`
 }
 
 export function buildMentionCooccurrenceGraph(
@@ -43,7 +43,7 @@ export function buildMentionCooccurrenceGraph(
     } else {
       nodeMap.set(id, {
         id,
-        kind: m.kind,
+        kind: m.type,
         targetId: m.targetId,
         label: m.targetName,
         memoCount: 1,

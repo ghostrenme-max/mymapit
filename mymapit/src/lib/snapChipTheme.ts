@@ -54,6 +54,13 @@ export const SNAP_CHIP_THEME: Record<
     bgResult: 'rgba(122,107,58,0.15)',
     borderResult: 'rgba(122,107,58,0.3)',
   },
+  storyNode: {
+    color: '#805AD5',
+    bg: 'rgba(128,90,213,0.15)',
+    border: 'rgba(128,90,213,0.35)',
+    bgResult: 'rgba(128,90,213,0.15)',
+    borderResult: 'rgba(128,90,213,0.3)',
+  },
 }
 
 export function snapChipTheme(kind: MentionKind) {
