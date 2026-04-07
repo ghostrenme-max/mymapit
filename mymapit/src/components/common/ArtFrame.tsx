@@ -3,10 +3,12 @@ import type { ReactNode } from 'react'
 type Props = {
   children: ReactNode
   className?: string
+  /** 내부 패딩 (이미지 풀블리드는 `p-0`) */
+  contentClassName?: string
 }
 
 /** 모서리 장식이 있는 컨셉 아트 프레임 */
-export function ArtFrame({ children, className = '' }: Props) {
+export function ArtFrame({ children, className = '', contentClassName = 'p-4 pt-6' }: Props) {
   return (
     <div
       className={`relative overflow-hidden rounded-sm border border-ab-border bg-ab-muted/40 ${className}`}
@@ -27,7 +29,7 @@ export function ArtFrame({ children, className = '' }: Props) {
         className="pointer-events-none absolute bottom-1 right-1 h-5 w-5 border-b-2 border-r-2 border-ab-text"
         aria-hidden
       />
-      <div className="p-4 pt-6">{children}</div>
+      <div className={contentClassName}>{children}</div>
     </div>
   )
 }

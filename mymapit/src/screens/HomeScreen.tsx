@@ -54,12 +54,7 @@ export function HomeScreen() {
   if (projects.length === 0) {
     return (
       <div className="flex flex-col">
-        <TopBar
-          title="mymapit"
-          onMenu={() => setSidebar(true)}
-          showSearch
-          onSearchClick={() => searchRef.current?.focus()}
-        />
+        <TopBar title="mymapit" onMenu={() => setSidebar(true)} />
         <div className="flex flex-col gap-4 px-4 py-8 text-center">
           <p className="font-title-italic text-xl text-ab-text">프로젝트가 없습니다</p>
           <p className="text-sm text-ab-sub">데모 데이터로 UI를 둘러보거나, 샘플 질문으로 세계관을 만들 수 있어요.</p>
@@ -87,8 +82,15 @@ export function HomeScreen() {
       <TopBar
         title="mymapit"
         onMenu={() => setSidebar(true)}
-        showSearch
-        onSearchClick={() => searchRef.current?.focus()}
+        right={
+          <button
+            type="button"
+            onClick={() => navigate('/artbook')}
+            className="rounded-sm bg-ab-point px-2 py-1.5 text-[10px] font-semibold leading-none text-ab-card active:opacity-90"
+          >
+            아트북 바로가기
+          </button>
+        }
       />
       <div className="border-b border-ab-border bg-ab-card px-3 py-2">
         <input
@@ -129,7 +131,7 @@ export function HomeScreen() {
           >
             <p className="font-title-italic text-base font-semibold text-ab-text">다음 그룹은 PRO</p>
             <p className="text-xs leading-relaxed text-ab-sub">
-              무료는 메모 그룹 3개까지예요. PRO(₩4,900)로 무제한 그룹·@@ AI 월 10회·광고 제거를 쓸 수 있어요.
+              무료는 메모 그룹 3개까지예요. PRO(₩4,900)로 무제한 그룹·아트북·Snap·광고 제거를 쓸 수 있어요.
             </p>
             <span className="text-xs font-semibold text-ab-text underline">프리미엄 보기 →</span>
           </button>

@@ -2,7 +2,6 @@ type Row = { icon: string; text: string }
 
 const ROWS: Row[] = [
   { icon: '@', text: '단일 @ — 캐릭터·세계관·장소 등 7종 컬러 띠지' },
-  { icon: '@@', text: '이중 @@ — AI 인포 페이지 (월 한도, PRO 혜택)' },
   { icon: '◎', text: 'Snap — 같은 메모·연결맵에서 관계 한눈에' },
   { icon: '▣', text: '아트북 — 세계관 / 캐릭터 / 서사 정리' },
 ]

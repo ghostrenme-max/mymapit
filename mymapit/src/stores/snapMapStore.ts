@@ -7,6 +7,7 @@ type Pos = { x: number; y: number }
 /** 연결맵 탭용 — 메모 공출현 이웃 (좌표 레이아웃과 별도, persist 제외) */
 export type SnapNeighborDTO = {
   id: string
+  targetId: string
   weight: number
   kind: MentionKind
   label: string

@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/shallow'
 import { MENTION_TAB_ROWS, mentionKindMeta } from '../../constants/mentionKinds'
+import { effectiveRelaxation, effectiveTension } from '../../lib/storyMetrics'
 import { useArtbookStore } from '../../stores/artbookStore'
 import { useMentionStore } from '../../stores/mentionStore'
-import type { Mention } from '../../stores/types'
+import type { MemoEntitySideNote, Mention } from '../../stores/types'
 import { TajiTag } from '../common/TajiTag'
 
 type Props = {
@@ -13,6 +14,11 @@ type Props = {
   /** 현재 메모 본문에서 함께 등장한 다른 @ (Snap 연결) */
   sameMemoMentions?: Mention[]
   onClose: () => void
+  /** 이 메모 안에서만 쓰는 관계·비밀·상태 (아트북 본문과 별도) */
+  memoSideNote?: {
+    note: MemoEntitySideNote
+    onSave: (note: MemoEntitySideNote) => void
+  }
 }
 
 function legendChipStyle(row: { color: string; bg: string }) {
@@ -26,9 +32,23 @@ function legendChipStyle(row: { color: string; bg: string }) {
 
 type StoryLink = { id: string; title: string }
 
-export function TajiPanel({ open, mention, sameMemoMentions = [], onClose }: Props) {
+export function TajiPanel({
+  open,
+  mention,
+  sameMemoMentions = [],
+  onClose,
+  memoSideNote,
+}: Props) {
   const navigate = useNavigate()
   const [showColorLegend, setShowColorLegend] = useState(false)
+  const [rel, setRel] = useState('')
+  const [sec, setSec] = useState('')
+  const [st, setSt] = useState('')
+
+  const flushSideNote = () => {
+    if (!memoSideNote) return
+    memoSideNote.onSave({ relationship: rel, secret: sec, status: st })
+  }
 
   const characters = useMentionStore((s) => s.characters)
   const worldObjects = useMentionStore((s) => s.worldObjects)
@@ -79,7 +99,8 @@ export function TajiPanel({ open, mention, sameMemoMentions = [], onClose }: Pro
         tags: [] as string[],
         storyLinks,
         quote: undefined as string | undefined,
-        tension: n?.tension,
+        tension: n ? effectiveTension(n) : undefined,
+        relaxation: n ? effectiveRelaxation(n) : undefined,
       }
     }
 
@@ -114,6 +135,24 @@ export function TajiPanel({ open, mention, sameMemoMentions = [], onClose }: Pro
   useEffect(() => {
     setShowColorLegend(false)
   }, [open, mention?.id, mention?.targetId])
+
+  useEffect(() => {
+    if (!memoSideNote) {
+      setRel('')
+      setSec('')
+      setSt('')
+      return
+    }
+    setRel(memoSideNote.note.relationship)
+    setSec(memoSideNote.note.secret)
+    setSt(memoSideNote.note.status)
+  }, [
+    open,
+    mention?.targetId,
+    memoSideNote?.note.relationship,
+    memoSideNote?.note.secret,
+    memoSideNote?.note.status,
+  ])
 
   if (!open || !mention || !detail || !meta) return null
 
@@ -152,12 +191,52 @@ export function TajiPanel({ open, mention, sameMemoMentions = [], onClose }: Pro
             <h2 className="font-title-italic text-xl font-semibold text-ab-text">{detail.title}</h2>
             <p className="mt-1 text-xs text-ab-sub">{detail.role}</p>
             {'tension' in detail && detail.tension != null && (
-              <p className="mt-1 text-xs tabular-nums text-ab-sub">긴장도 {detail.tension}</p>
+              <p className="mt-1 text-xs tabular-nums text-ab-sub">
+                긴장 {detail.tension}
+                {'relaxation' in detail && detail.relaxation != null
+                  ? ` · 이완 ${detail.relaxation}`
+                  : ''}
+              </p>
             )}
             {detail.quote && (
               <p className="mt-3 border-l-2 pl-3 text-sm italic text-ab-text" style={{ borderColor: meta.color }}>
                 {detail.quote}
               </p>
+            )}
+            {memoSideNote && (
+              <div className="mt-5 rounded-sm border border-ab-border bg-ab-muted/25 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ab-sub">이 메모에서만</p>
+                <p className="mt-1 text-[11px] leading-snug text-ab-sub">
+                  아트북 카드와 별도로, 이 글 맥락만의 관계·비밀·상태를 적어 둘 수 있어요.
+                </p>
+                <label className="mt-3 block text-[11px] font-medium text-ab-text">관계 (한 줄)</label>
+                <textarea
+                  value={rel}
+                  onChange={(e) => setRel(e.target.value)}
+                  onBlur={flushSideNote}
+                  rows={2}
+                  className="mt-1 w-full resize-y rounded-sm border border-ab-border bg-ab-input px-2 py-1.5 text-xs text-ab-text outline-none"
+                  placeholder="예: 이번 장에서는 적대"
+                />
+                <label className="mt-2 block text-[11px] font-medium text-ab-text">비밀 / 미공개 설정</label>
+                <textarea
+                  value={sec}
+                  onChange={(e) => setSec(e.target.value)}
+                  onBlur={flushSideNote}
+                  rows={2}
+                  className="mt-1 w-full resize-y rounded-sm border border-ab-border bg-ab-input px-2 py-1.5 text-xs text-ab-text outline-none"
+                  placeholder="독자에게 숨긴 정보"
+                />
+                <label className="mt-2 block text-[11px] font-medium text-ab-text">현재 상태</label>
+                <textarea
+                  value={st}
+                  onChange={(e) => setSt(e.target.value)}
+                  onBlur={flushSideNote}
+                  rows={2}
+                  className="mt-1 w-full resize-y rounded-sm border border-ab-border bg-ab-input px-2 py-1.5 text-xs text-ab-text outline-none"
+                  placeholder="이 메모 시점에서의 상태"
+                />
+              </div>
             )}
             <p className="mt-4 text-sm leading-relaxed text-ab-text">{detail.body}</p>
             {detail.tags.length > 0 && (

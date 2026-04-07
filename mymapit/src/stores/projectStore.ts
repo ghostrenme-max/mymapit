@@ -9,6 +9,7 @@ type State = {
   setPendingAnswers: (a: QuestionAnswers | null) => void
   getProject: (id: string | null) => Project | undefined
   addProject: (p: Project) => void
+  patchProject: (id: string, patch: Partial<Omit<Project, 'id' | 'createdAt'>>) => void
   resetProjects: () => void
 }
 
@@ -26,6 +27,11 @@ export const useProjectStore = create<State>((set, get) => ({
   },
 
   addProject: (p) => set((s) => ({ projects: [...s.projects, p], currentProjectId: p.id })),
+
+  patchProject: (id, patch) =>
+    set((s) => ({
+      projects: s.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    })),
 
   resetProjects: () =>
     set({

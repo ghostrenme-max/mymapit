@@ -55,7 +55,9 @@ export function Step01MemoGroups() {
       </div>
 
       <h2 className="mt-10 max-w-[min(100%,20rem)] text-center font-title-italic text-2xl font-semibold leading-snug text-white">
-        세계관을 메모처럼 자유롭게 써
+        세계관을 메모처럼
+        <br />
+        자유롭게 써
       </h2>
       <p className="mt-3 max-w-[min(100%,20rem)] text-center text-sm leading-relaxed text-white/55">
         아래에서 그룹 이름을 입력하고 + 를 눌러 체험해 보세요. 실제 앱에서는 홈에서 그룹을 만듭니다.

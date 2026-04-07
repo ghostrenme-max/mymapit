@@ -5,7 +5,6 @@ import { useMentionStore } from './mentionStore'
 import { useProjectStore } from './projectStore'
 import {
   DEMO_PID,
-  seedAiCards,
   seedChars,
   seedKw,
   seedMemos,
@@ -31,7 +30,7 @@ export function loadDemoWorld() {
   })
   useMemoStore.getState().setMemoState(seedMemoGroups, seedMemos)
   useMentionStore.getState().setMentionEntities(seedChars, seedWorldObjects)
-  useArtbookStore.getState().setArtbookData(seedStory, seedKw, seedAiCards)
+  useArtbookStore.getState().setArtbookData(seedStory, seedKw)
   useUserStore.setState({ onboardingCompleted: true })
 }
 
@@ -48,8 +47,6 @@ export function resetToEmptyFlow() {
   useUserStore.setState({
     onboardingCompleted: false,
     isPro: false,
-    credits: 0,
-    monthlyAiUsed: 0,
     sidebarOpen: false,
   })
 }
@@ -64,6 +61,7 @@ export function addEmptyProject(name: string) {
     theme: '',
     scale: '',
     createdAt: new Date().toISOString(),
+    conceptImageUri: null as string | null,
   }
   useProjectStore.getState().addProject(p)
   useMemoStore.getState().addMemoGroup(p.id, '기본 그룹')
@@ -80,6 +78,7 @@ export function addProjectFromAnswers(a: QuestionAnswers) {
     theme: a.theme,
     scale: a.scale,
     createdAt: new Date().toISOString(),
+    conceptImageUri: null as string | null,
   }
   const n1 = {
     id: newId('sn'),
@@ -87,7 +86,9 @@ export function addProjectFromAnswers(a: QuestionAnswers) {
     type: 'act' as const,
     title: '제1막',
     description: `${a.genre} 톤의 도입부를 여기에 펼쳐보세요.`,
-    tension: 5,
+    tension: 10,
+    relaxation: 10,
+    emotionExtras: [] as { id: string; label: string; value: number }[],
     parentId: null,
     order: 0,
     characterIds: [] as string[],
@@ -106,8 +107,14 @@ export function addProjectFromAnswers(a: QuestionAnswers) {
     imageUri: null,
     quote: '이야기는 이제 막 시작됐다.',
     voiceTone: { pitch: 50, emotion: 50, speed: 50 },
-    relations: [] as { targetId: string; emotion: string }[],
-    values: [{ theme: '출발점', answer: '질문 플로우에서 잡은 톤을 이어가 보세요.' }],
+    relations: [],
+    values: [
+      {
+        id: `val-${crypto.randomUUID().slice(0, 12)}`,
+        theme: '출발점',
+        answer: '질문 플로우에서 잡은 톤을 이어가 보세요.',
+      },
+    ],
     storyNodeIds: [n1.id],
   }
   n1.characterIds = [c1.id]

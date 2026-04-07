@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { OnboardingChrome } from '../components/onboarding/OnboardingChrome'
 import { Step01MemoGroups } from '../components/onboarding/Step01MemoGroups'
 import { Step02Mention } from '../components/onboarding/Step02Mention'
-import { Step03Ai } from '../components/onboarding/Step03Ai'
 import { Step04Snap } from '../components/onboarding/Step04Snap'
 import { Step05Start } from '../components/onboarding/Step05Start'
 import { loadDemoWorld } from '../stores/actions'
 import { useUserStore } from '../stores/userStore'
 
-const TOTAL = 5
+const TOTAL = 4
 
 export function OnboardingScreen() {
   const navigate = useNavigate()
@@ -40,8 +39,6 @@ export function OnboardingScreen() {
     ) : step === 1 ? (
       <Step02Mention />
     ) : step === 2 ? (
-      <Step03Ai />
-    ) : step === 3 ? (
       <Step04Snap />
     ) : (
       <Step05Start onStart={finish} />

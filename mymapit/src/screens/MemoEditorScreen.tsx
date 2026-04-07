@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBlocker, useNavigate, useParams } from 'react-router-dom'
-import { AiAnalyzingOverlay } from '../components/memo/AiAnalyzingOverlay'
-import { AiInfoBottomSheet } from '../components/memo/AiInfoBottomSheet'
 import { MentionPopup, type MentionPick } from '../components/memo/MentionPopup'
-import { ProUpsellSheet } from '../components/memo/ProUpsellSheet'
 import { TajiPanel } from '../components/memo/TajiPanel'
 import { isMentionKind, legacyDatasetTypeToKind } from '../constants/mentionKinds'
-import { detectDoubleAtTrigger, isInsideDoubleAtDraft } from '../lib/doubleAtTrigger'
-import { deleteTriggeredDoubleAtBlock, getPlainTextBeforeCaret } from '../lib/editorPlainText'
-import type { AiExtractDraft } from '../lib/mockAiExtract'
-import { mockAiExtract } from '../lib/mockAiExtract'
-import { useArtbookStore } from '../stores/artbookStore'
+import { getPlainTextBeforeCaret } from '../lib/editorPlainText'
+import { extractTextFromFile, plainTextToEditorHtml } from '../lib/plainTextImport'
+import { BulkMentionPanel } from '../components/memo/BulkMentionPanel'
+import { MemoSnapshotSheet } from '../components/memo/MemoSnapshotSheet'
+import { createDefaultWritingChecklist } from '../lib/defaultWritingChecklist'
+import {
+  EXPORT_PRESET_LABELS,
+  exportMemoHtmlToText,
+  type ExportPreset,
+} from '../lib/exportMemoText'
 import { useMemoStore } from '../stores/memoStore'
 import { useProjectStore } from '../stores/projectStore'
-import type { Mention, MentionKind } from '../stores/types'
+import type { MemoContentSnapshot, Mention, MentionKind } from '../stores/types'
 import { useUserStore } from '../stores/userStore'
 
 function getCaretOffsetWithin(root: HTMLElement): number {
@@ -86,31 +88,29 @@ export function MemoEditorScreen() {
   const titleRef = useRef('')
   const editorRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const mentionRangeRef = useRef<Range | null>(null)
   const titleMentionRef = useRef<{ start: number; end: number } | null>(null)
   const activeMentionFieldRef = useRef<'title' | 'editor' | null>(null)
-  const aiRunLockRef = useRef(false)
-  const aiTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const baselineRef = useRef<MemoBaseline>({ title: '', content: '', mentions: [] })
 
   const pid = useProjectStore((s) => s.currentProjectId)
   const memo = useMemoStore((s) => s.memos.find((m) => m.id === memoId))
   const updateMemo = useMemoStore((s) => s.updateMemo)
+  const pushMemoContentSnapshot = useMemoStore((s) => s.pushMemoContentSnapshot)
+  const deleteMemoContentSnapshot = useMemoStore((s) => s.deleteMemoContentSnapshot)
   const setSidebar = useUserStore((s) => s.setSidebarOpen)
-  const tryConsumeAi = useUserStore((s) => s.tryConsumeAiAnalysis)
-  const addAiInfoCard = useArtbookStore((s) => s.addAiInfoCard)
 
   const [title, setTitle] = useState('')
   const [popupOpen, setPopupOpen] = useState(false)
   const [filterQuery, setFilterQuery] = useState('')
   const [panelMention, setPanelMention] = useState<Mention | null>(null)
-  const [analyzingAi, setAnalyzingAi] = useState(false)
-  const [aiSheetOpen, setAiSheetOpen] = useState(false)
-  const [aiDraft, setAiDraft] = useState<AiExtractDraft | null>(null)
-  const [aiSourceText, setAiSourceText] = useState('')
-  const [proUpsellOpen, setProUpsellOpen] = useState(false)
   const [leaveModalOpen, setLeaveModalOpen] = useState(false)
   const [sameMemoSnap, setSameMemoSnap] = useState<Mention[]>([])
+  const [bulkMentionOpen, setBulkMentionOpen] = useState(false)
+  const [bulkInitialMatch, setBulkInitialMatch] = useState('')
+  const [snapshotSheetOpen, setSnapshotSheetOpen] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
 
   const closeMentionPopup = useCallback(() => {
     setPopupOpen(false)
@@ -118,17 +118,6 @@ export function MemoEditorScreen() {
     titleMentionRef.current = null
     activeMentionFieldRef.current = null
   }, [])
-
-  useEffect(
-    () => () => {
-      if (aiTimeoutRef.current != null) {
-        window.clearTimeout(aiTimeoutRef.current)
-        aiTimeoutRef.current = null
-      }
-      aiRunLockRef.current = false
-    },
-    [],
-  )
 
   useEffect(() => {
     if (!memoId || !editorRef.current) return
@@ -142,6 +131,67 @@ export function MemoEditorScreen() {
       mentions: [...m.mentions],
     }
   }, [memoId])
+
+  const pushPreEditSnapshot = useCallback(
+    (label: string) => {
+      if (!memoId || !editorRef.current) return
+      const el = editorRef.current
+      const m = useMemoStore.getState().memos.find((x) => x.id === memoId)
+      pushMemoContentSnapshot(memoId, {
+        label,
+        title: titleRef.current,
+        content: el.innerHTML,
+        mentions: parseMentionsFromEditor(el),
+        entitySideNotes: m?.entitySideNotes ? { ...m.entitySideNotes } : undefined,
+        writingChecklist: m?.writingChecklist?.map((c) => ({ ...c })),
+      })
+    },
+    [memoId, pushMemoContentSnapshot],
+  )
+
+  const applySnapshotRestore = useCallback(
+    (snap: MemoContentSnapshot) => {
+      if (!memoId || !editorRef.current) return
+      if (!window.confirm('현재 편집 내용을 이 스냅샷 시점으로 바꿉니다. 계속할까요?')) return
+      setTitle(snap.title)
+      titleRef.current = snap.title
+      editorRef.current.innerHTML = snap.content
+      const patch: Parameters<typeof updateMemo>[1] = {
+        title: snap.title,
+        content: snap.content,
+        mentions: [...snap.mentions],
+      }
+      if (snap.entitySideNotes !== undefined) {
+        patch.entitySideNotes = { ...snap.entitySideNotes }
+      }
+      if (snap.writingChecklist !== undefined) {
+        patch.writingChecklist = snap.writingChecklist.map((c) => ({ ...c }))
+      }
+      updateMemo(memoId, patch)
+      baselineRef.current = {
+        title: snap.title,
+        content: snap.content,
+        mentions: [...snap.mentions],
+      }
+      setSnapshotSheetOpen(false)
+    },
+    [memoId, updateMemo],
+  )
+
+  const copyExportedBody = useCallback(
+    async (preset: ExportPreset) => {
+      const html = editorRef.current?.innerHTML ?? ''
+      const text = exportMemoHtmlToText(html, preset)
+      try {
+        await navigator.clipboard.writeText(text)
+        window.alert(`본문을 복사했습니다.\n(${EXPORT_PRESET_LABELS[preset]})`)
+      } catch {
+        window.alert('클립보드 복사에 실패했습니다.')
+      }
+      setExportMenuOpen(false)
+    },
+    [],
+  )
 
   useEffect(() => {
     const root = editorRef.current
@@ -209,39 +259,6 @@ export function MemoEditorScreen() {
     }
   }, [memoId, title, updateMemo, flushContent])
 
-  const runAiAfterDoubleAt = useCallback(() => {
-    const root = editorRef.current
-    if (!root || analyzingAi || aiSheetOpen || aiRunLockRef.current) return
-    const sel = window.getSelection()
-    if (!sel?.rangeCount || !root.contains(sel.anchorNode)) return
-    const before = getPlainTextBeforeCaret(root) ?? ''
-    if (!detectDoubleAtTrigger(before)) return
-
-    aiRunLockRef.current = true
-    if (!tryConsumeAi()) {
-      aiRunLockRef.current = false
-      setProUpsellOpen(true)
-      return
-    }
-
-    const plainFull = root.innerText.replace(/\r\n/g, '\n')
-
-    setAnalyzingAi(true)
-    if (aiTimeoutRef.current != null) window.clearTimeout(aiTimeoutRef.current)
-    aiTimeoutRef.current = window.setTimeout(() => {
-      aiTimeoutRef.current = null
-      deleteTriggeredDoubleAtBlock(root)
-      const draft = mockAiExtract(plainFull, pid)
-      setAiSourceText(plainFull.slice(0, 500))
-      setAiDraft(draft)
-      setAnalyzingAi(false)
-      setAiSheetOpen(true)
-      root.focus()
-      flushContent()
-      aiRunLockRef.current = false
-    }, 1200)
-  }, [analyzingAi, aiSheetOpen, tryConsumeAi, pid, flushContent])
-
   const openMentionFromEditor = useCallback(() => {
     const root = editorRef.current
     if (!root) return
@@ -261,11 +278,6 @@ export function MemoEditorScreen() {
     pre.selectNodeContents(root)
     pre.setEnd(range.startContainer, range.startOffset)
     const before = getPlainTextBeforeCaret(root) ?? pre.toString()
-
-    if (isInsideDoubleAtDraft(before)) {
-      setPopupOpen(false)
-      return
-    }
 
     const match = before.match(/@([^\n@]*)$/)
     if (!match) {
@@ -310,16 +322,10 @@ export function MemoEditorScreen() {
 
   const onEditorInput = () => {
     openMentionFromEditor()
-    runAiAfterDoubleAt()
   }
 
-  const onEditorKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const onEditorKeyUp = () => {
     openMentionFromEditor()
-    if (e.key === 'Enter') {
-      window.queueMicrotask(() => runAiAfterDoubleAt())
-    } else {
-      runAiAfterDoubleAt()
-    }
   }
 
   const onEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -398,6 +404,41 @@ export function MemoEditorScreen() {
     flushContent()
   }
 
+  const getEditorSelectionText = () => {
+    const sel = window.getSelection()
+    const root = editorRef.current
+    if (!sel?.rangeCount || !root) return ''
+    try {
+      if (!root.contains(sel.anchorNode)) return ''
+    } catch {
+      return ''
+    }
+    return sel.toString().trim()
+  }
+
+  const openBulkMentionPanel = () => {
+    setBulkInitialMatch(getEditorSelectionText())
+    setBulkMentionOpen(true)
+  }
+
+  const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const res = await extractTextFromFile(file)
+    if (!res.ok) {
+      window.alert(res.error)
+      return
+    }
+    const root = editorRef.current
+    if (!root) return
+    const hasContent = (root.innerText || '').trim().length > 0
+    if (hasContent && !window.confirm('현재 본문을 가져온 파일 내용으로 바꿀까요?')) return
+    if (hasContent) pushPreEditSnapshot('파일 가져오기 전')
+    root.innerHTML = plainTextToEditorHtml(res.text)
+    flushContent()
+  }
+
   const openMentionPalette = () => {
     const editor = editorRef.current
     editor?.focus()
@@ -431,23 +472,6 @@ export function MemoEditorScreen() {
     setLeaveModalOpen(false)
     if (blocker.state === 'blocked') blocker.proceed()
   }, [revertToBaseline, blocker])
-
-  const handleSaveAiToArtbook = () => {
-    if (!aiDraft || !pid) return
-    addAiInfoCard({
-      projectId: pid,
-      sourceText: aiSourceText,
-      summary: aiDraft.summary,
-      tension: aiDraft.tension,
-      characters: aiDraft.characters,
-      worldElements: aiDraft.worldElements,
-      places: aiDraft.places,
-      objects: aiDraft.objects,
-      suggestedKeywords: aiDraft.suggestedKeywords,
-    })
-    setAiSheetOpen(false)
-    setAiDraft(null)
-  }
 
   if (!memo || !groupId) {
     return (
@@ -509,6 +533,14 @@ export function MemoEditorScreen() {
         </button>
       </header>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".txt,.text,.md,.docx,.csv,.log,.json"
+        className="hidden"
+        onChange={onImportFile}
+      />
+
       <div className="flex flex-wrap gap-1 border-b border-ab-border bg-ab-muted/40 px-2 py-1.5">
         <button
           type="button"
@@ -517,6 +549,70 @@ export function MemoEditorScreen() {
         >
           @
         </button>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-sm border border-ab-border bg-ab-card px-2 py-1 text-[11px] text-ab-text"
+        >
+          파일
+        </button>
+        <button
+          type="button"
+          onClick={openBulkMentionPanel}
+          className="rounded-sm border border-ab-point/40 bg-ab-card px-2 py-1 text-[11px] font-medium text-ab-point"
+        >
+          단어→@
+        </button>
+        <button
+          type="button"
+          onClick={() => setSnapshotSheetOpen(true)}
+          className="rounded-sm border border-ab-border bg-ab-card px-2 py-1 text-[11px] text-ab-text"
+        >
+          버전
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const label = window.prompt('스냅샷 이름 (예: 퇴고 전)', '수동 저장')
+            if (label === null) return
+            pushPreEditSnapshot(label.trim() || '수동 저장')
+            window.alert('현재 본문이 스냅샷에 저장되었습니다.')
+          }}
+          className="rounded-sm border border-ab-border bg-ab-card px-2 py-1 text-[11px] text-ab-text"
+        >
+          스냅 저장
+        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setExportMenuOpen((v) => !v)}
+            className="rounded-sm border border-ab-border bg-ab-card px-2 py-1 text-[11px] text-ab-text"
+          >
+            보내기
+          </button>
+          {exportMenuOpen && (
+            <>
+              <button
+                type="button"
+                className="fixed inset-0 z-[54] cursor-default"
+                aria-label="메뉴 닫기"
+                onClick={() => setExportMenuOpen(false)}
+              />
+              <div className="absolute left-0 top-full z-[55] mt-0.5 min-w-[200px] rounded-sm border border-ab-border bg-ab-card py-1 shadow-md">
+                {(['plain', 'footnote', 'wiki'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => void copyExportedBody(preset)}
+                    className="block w-full px-3 py-2 text-left text-[11px] text-ab-text active:bg-ab-muted/60"
+                  >
+                    {EXPORT_PRESET_LABELS[preset]}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <button type="button" onClick={() => toolbar('bold')} className="rounded-sm border border-ab-border px-2 py-1 text-[11px] font-bold">
           B
         </button>
@@ -528,13 +624,79 @@ export function MemoEditorScreen() {
         </button>
       </div>
 
-      <p className="border-b border-ab-border bg-ab-muted/30 px-3 py-2 text-[10px] leading-snug text-ab-sub">
-        <span className="font-semibold text-ab-text">@@ AI</span>
-        <br />
-        @@ 뒤에 문장을 쓰고 엔터를 치거나,
-        <br />
-        20자 이상 이어 쓰면 분석이 돌아가요
+      <p className="border-b border-ab-border bg-ab-muted/20 px-3 py-1.5 text-[10px] leading-snug text-ab-sub">
+        <span className="font-semibold text-ab-text">가져오기 정리</span> — 파일로 붙인 뒤 「단어→@」에서 같은 말을 아트북 항목에 한꺼번에 연결할 수 있어요.{' '}
+        <span className="font-semibold text-ab-text">보내기</span>는 멘션 표기만 바꾼 텍스트를 복사합니다.
       </p>
+
+      <div className="border-b border-ab-border bg-ab-card px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-ab-sub">집필 체크리스트</p>
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (!memoId) return
+                const cur = memo?.writingChecklist ?? []
+                if (cur.length > 0 && !window.confirm('기본 항목을 목록 뒤에 붙일까요?')) return
+                updateMemo(memoId, { writingChecklist: [...cur, ...createDefaultWritingChecklist()] })
+              }}
+              className="rounded-sm border border-ab-border bg-ab-muted/40 px-2 py-0.5 text-[10px] text-ab-text"
+            >
+              기본 항목 넣기
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!memoId) return
+                const label = window.prompt('새 체크 항목')
+                if (!label?.trim()) return
+                const cur = memo?.writingChecklist ?? []
+                updateMemo(memoId, {
+                  writingChecklist: [...cur, { id: `chk-${crypto.randomUUID()}`, label: label.trim(), done: false }],
+                })
+              }}
+              className="rounded-sm border border-ab-border bg-ab-muted/40 px-2 py-0.5 text-[10px] text-ab-text"
+            >
+              + 항목
+            </button>
+          </div>
+        </div>
+        {(memo.writingChecklist?.length ?? 0) === 0 ? (
+          <p className="mt-1 text-[11px] text-ab-sub">목표를 체크해 두면 본문과 섞이지 않고 진행만 볼 수 있어요.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {memo.writingChecklist!.map((item) => (
+              <li key={item.id} className="flex items-start gap-2 text-xs text-ab-text">
+                <input
+                  type="checkbox"
+                  checked={item.done}
+                  onChange={() => {
+                    if (!memoId) return
+                    const list = memo.writingChecklist ?? []
+                    updateMemo(memoId, {
+                      writingChecklist: list.map((x) => (x.id === item.id ? { ...x, done: !x.done } : x)),
+                    })
+                  }}
+                  className="mt-0.5"
+                />
+                <span className={item.done ? 'text-ab-sub line-through' : ''}>{item.label}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!memoId) return
+                    const list = memo.writingChecklist ?? []
+                    updateMemo(memoId, { writingChecklist: list.filter((x) => x.id !== item.id) })
+                  }}
+                  className="ml-auto shrink-0 text-[10px] text-ab-sub"
+                >
+                  삭제
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="relative min-h-[200px] flex-1">
         <div
@@ -542,13 +704,12 @@ export function MemoEditorScreen() {
           className="ab-editor h-full overflow-y-auto bg-ab-input px-3 py-3 text-sm leading-relaxed text-ab-text outline-none"
           contentEditable
           suppressContentEditableWarning
-          data-placeholder="메모 본문… (@ 단일 멘션)"
+          data-placeholder="메모 본문… (@ 멘션, 파일 가져오기)"
           onInput={onEditorInput}
           onKeyUp={onEditorKeyUp}
           onClick={onEditorClick}
           onBlur={flushContent}
         />
-        {analyzingAi && <AiAnalyzingOverlay />}
       </div>
 
       {popupOpen && (
@@ -560,33 +721,63 @@ export function MemoEditorScreen() {
         />
       )}
 
+      {bulkMentionOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[57] bg-ab-text/25"
+          aria-label="패널 닫기"
+          onClick={() => setBulkMentionOpen(false)}
+        />
+      )}
+      <BulkMentionPanel
+        open={bulkMentionOpen}
+        projectId={pid}
+        editorRoot={editorRef.current}
+        initialMatch={bulkInitialMatch}
+        onClose={() => setBulkMentionOpen(false)}
+        onBeforeApply={() => pushPreEditSnapshot('단어→@ 적용 전')}
+        onApplied={(count) => {
+          flushContent()
+          if (count > 0) window.alert(`${count}곳에 적용했습니다.`)
+        }}
+      />
+
+      <MemoSnapshotSheet
+        open={snapshotSheetOpen}
+        snapshots={memo.contentSnapshots ?? []}
+        onClose={() => setSnapshotSheetOpen(false)}
+        onRestore={applySnapshotRestore}
+        onDelete={(snapshotId) => {
+          if (!memoId) return
+          deleteMemoContentSnapshot(memoId, snapshotId)
+        }}
+      />
+
       <TajiPanel
         open={!!panelMention}
         mention={panelMention}
         sameMemoMentions={sameMemoSnap}
+        memoSideNote={
+          memoId && panelMention
+            ? {
+                note:
+                  memo.entitySideNotes?.[panelMention.targetId] ?? {
+                    relationship: '',
+                    secret: '',
+                    status: '',
+                  },
+                onSave: (note) => {
+                  const m = useMemoStore.getState().memos.find((x) => x.id === memoId)
+                  updateMemo(memoId, {
+                    entitySideNotes: { ...(m?.entitySideNotes ?? {}), [panelMention.targetId]: note },
+                  })
+                },
+              }
+            : undefined
+        }
         onClose={() => {
           setPanelMention(null)
           setSameMemoSnap([])
-        }}
-      />
-
-      <AiInfoBottomSheet
-        open={aiSheetOpen}
-        draft={aiDraft}
-        sourceText={aiSourceText}
-        onClose={() => {
-          setAiSheetOpen(false)
-          setAiDraft(null)
-        }}
-        onSaveToArtbook={handleSaveAiToArtbook}
-      />
-
-      <ProUpsellSheet
-        open={proUpsellOpen}
-        onClose={() => setProUpsellOpen(false)}
-        onGoPremium={() => {
-          setProUpsellOpen(false)
-          navigate('/premium')
         }}
       />
 

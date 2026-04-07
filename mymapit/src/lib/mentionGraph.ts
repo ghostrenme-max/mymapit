@@ -91,6 +91,25 @@ export function buildMentionCooccurrenceGraph(
   return { nodes, edges, signature }
 }
 
+/** FREE Snap 라이트: 공출현이 많은 노드 위주로 상한만큼만 유지 */
+export function limitSnapGraphLite(
+  g: { nodes: GraphNode[]; edges: GraphEdge[]; signature: string },
+  maxNodes: number,
+): { nodes: GraphNode[]; edges: GraphEdge[]; signature: string } {
+  if (g.nodes.length <= maxNodes) return g
+  const sorted = [...g.nodes].sort(
+    (a, b) => b.memoCount - a.memoCount || a.label.localeCompare(b.label, 'ko'),
+  )
+  const nodes = sorted.slice(0, maxNodes).sort((a, b) => a.label.localeCompare(b.label, 'ko'))
+  const allowed = new Set(nodes.map((n) => n.id))
+  const edges = g.edges.filter((e) => allowed.has(e.source) && allowed.has(e.target))
+  const signature = `${nodes
+    .map((n) => n.id)
+    .sort()
+    .join('|')}#${edges.map((e) => `${e.source}-${e.target}:${e.weight}`).join('|')}`
+  return { nodes, edges, signature }
+}
+
 export type NeighborWithWeight = { node: GraphNode; weight: number }
 
 /** 노드 id → 같은 메모 공출현 이웃 (가중치 내림차순) */

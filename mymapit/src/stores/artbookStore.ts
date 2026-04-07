@@ -1,36 +1,24 @@
 import { create } from 'zustand'
-import type { AiInfoCard, Keyword, StoryNode } from './types'
-
-function newId(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`
-}
+import type { Keyword, StoryNode } from './types'
 
 type State = {
   storyNodes: StoryNode[]
   keywords: Keyword[]
-  aiInfoCards: AiInfoCard[]
-  setArtbookData: (storyNodes: StoryNode[], keywords: Keyword[], aiInfoCards?: AiInfoCard[]) => void
-  addAiInfoCard: (card: Omit<AiInfoCard, 'id' | 'createdAt'>) => AiInfoCard
+  setArtbookData: (storyNodes: StoryNode[], keywords: Keyword[]) => void
+  patchStoryNode: (id: string, patch: Partial<Pick<StoryNode, 'tension' | 'relaxation' | 'emotionExtras'>>) => void
   resetArtbook: () => void
 }
 
 export const useArtbookStore = create<State>((set) => ({
   storyNodes: [],
   keywords: [],
-  aiInfoCards: [],
 
-  setArtbookData: (storyNodes, keywords, aiInfoCards = []) =>
-    set({ storyNodes, keywords, aiInfoCards }),
+  setArtbookData: (storyNodes, keywords) => set({ storyNodes, keywords }),
 
-  addAiInfoCard: (partial) => {
-    const card: AiInfoCard = {
-      ...partial,
-      id: newId('aiinfo'),
-      createdAt: new Date().toISOString(),
-    }
-    set((s) => ({ aiInfoCards: [...s.aiInfoCards, card] }))
-    return card
-  },
+  patchStoryNode: (id, patch) =>
+    set((s) => ({
+      storyNodes: s.storyNodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+    })),
 
-  resetArtbook: () => set({ storyNodes: [], keywords: [], aiInfoCards: [] }),
+  resetArtbook: () => set({ storyNodes: [], keywords: [] }),
 }))

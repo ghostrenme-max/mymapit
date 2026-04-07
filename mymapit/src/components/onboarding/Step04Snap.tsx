@@ -28,7 +28,9 @@ export function Step04Snap() {
   return (
     <div className="flex flex-col items-center pb-2">
       <h2 className="mt-2 max-w-[min(100%,20rem)] text-center font-title-italic text-2xl font-semibold leading-snug text-white">
-        하나를 누르면 연관된 모든 것이 당겨져
+        하나를 누르면 연관된
+        <br />
+        모든 것이 당겨져
       </h2>
       <p className="mt-3 max-w-[min(100%,20rem)] text-center text-sm leading-relaxed text-white/55">
         노드를 탭하면 Snap처럼 연결된 항목이 밝아지고, 아래에 순서대로 모여요.

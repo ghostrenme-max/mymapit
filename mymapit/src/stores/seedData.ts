@@ -1,14 +1,5 @@
 import type { MentionKind } from '../constants/mentionKinds'
-import type {
-  AiInfoCard,
-  Character,
-  Keyword,
-  Memo,
-  MemoGroup,
-  Project,
-  StoryNode,
-  WorldObject,
-} from './types'
+import type { Character, Keyword, Memo, MemoGroup, Project, StoryNode, WorldObject } from './types'
 
 export const DEMO_PID = 'proj-1'
 
@@ -28,7 +19,9 @@ export const seedStory: StoryNode[] = [
     type: 'act',
     title: '제1막 — 잿빛 도시',
     description: '주인공이 단편적 진실을 마주합니다.',
-    tension: 4,
+    tension: 8,
+    relaxation: 12,
+    emotionExtras: [],
     parentId: null,
     order: 0,
     characterIds: ['ch-1', 'ch-2'],
@@ -39,7 +32,9 @@ export const seedStory: StoryNode[] = [
     type: 'scene',
     title: '지하 광장',
     description: '네온과 비가 섞인 밤.',
-    tension: 6,
+    tension: 12,
+    relaxation: 9,
+    emotionExtras: [],
     parentId: 'sn-act1',
     order: 0,
     characterIds: ['ch-1'],
@@ -50,7 +45,9 @@ export const seedStory: StoryNode[] = [
     type: 'event',
     title: '첫 조우',
     description: '라이벌과의 짧은 대치.',
-    tension: 8,
+    tension: 16,
+    relaxation: 6,
+    emotionExtras: [],
     parentId: 'sn-sc1',
     order: 0,
     characterIds: ['ch-1', 'ch-2'],
@@ -72,10 +69,20 @@ export const seedChars: Character[] = [
     imageUri: null,
     quote: '진실은 소리 없이 스며든다.',
     voiceTone: { pitch: 62, emotion: 48, speed: 38 },
-    relations: [{ targetId: 'ch-2', emotion: '긴장' }],
+    relations: [{ targetId: 'ch-2', kind: 'rival', emotion: '긴장 — 같은 사건을 두고 대립' }],
     values: [
-      { theme: '희생', answer: '혼자 짊어지는 것과 함께 가는 것 사이.' },
-      { theme: '정의', answer: '법보다 잔향을 믿는다.' },
+      {
+        id: 'val-demo-aria-1',
+        theme: '희생',
+        answer: '혼자 짊어지는 것과 함께 가는 것 사이.',
+        isSample: true,
+      },
+      {
+        id: 'val-demo-aria-2',
+        theme: '정신',
+        answer: '법보다 잔향을 믿는다.',
+        isSample: true,
+      },
     ],
     storyNodeIds: ['sn-act1', 'sn-sc1', 'sn-ev1'],
   },
@@ -93,8 +100,15 @@ export const seedChars: Character[] = [
     imageUri: null,
     quote: '네가 찾는 답은 이미 값이 매겨졌어.',
     voiceTone: { pitch: 44, emotion: 72, speed: 55 },
-    relations: [{ targetId: 'ch-1', emotion: '경외' }],
-    values: [{ theme: '힘', answer: '약자에게 말을 건네는 것만으로도 충분하다.' }],
+    relations: [{ targetId: 'ch-1', kind: 'love_hate', emotion: '경외와 불신이 공존' }],
+    values: [
+      {
+        id: 'val-demo-cain-1',
+        theme: '힘',
+        answer: '약자에게 말을 건네는 것만으로도 충분하다.',
+        isSample: true,
+      },
+    ],
     storyNodeIds: ['sn-act1', 'sn-ev1'],
   },
 ]
@@ -204,31 +218,5 @@ export const seedProject: Project = {
   theme: '진실과 비밀',
   scale: '단일 도시',
   createdAt: new Date().toISOString(),
+  conceptImageUri: null,
 }
-
-export const seedAiCards: AiInfoCard[] = [
-  {
-    id: 'ai-demo-1',
-    projectId: DEMO_PID,
-    sourceText: '프롤로그 장면에서의 긴장',
-    summary: '하층 기록관과 상층 네온의 대비 속에서 주인공이 첫 단서를 얻는 구도.',
-    tension: 6,
-    characters: ['아리아 노트', '카인 벨로스'],
-    worldElements: ['잔향', '기억 거래'],
-    places: ['잊혀진 기록관', '네온 거리'],
-    objects: ['잔향 증폭기'],
-    suggestedKeywords: [
-      '아리아 노트',
-      '카인 벨로스',
-      '잔향',
-      '기억 거래',
-      '잊혀진 기록관',
-      '네온 거리',
-      '잔향 증폭기',
-      '다크',
-      '절망',
-      '진실과 비밀',
-    ],
-    createdAt: new Date().toISOString(),
-  },
-]

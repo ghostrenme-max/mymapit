@@ -111,7 +111,9 @@ export function Step02Mention() {
   return (
     <div className="flex flex-col items-center pb-2">
       <h2 className="mt-2 max-w-[min(100%,20rem)] text-center font-title-italic text-2xl font-semibold leading-snug text-white">
-        @로 캐릭터와 세계관을 연결해
+        @로 캐릭터와 세계관을
+        <br />
+        연결해
       </h2>
       <p className="mt-3 max-w-[min(100%,20rem)] text-center text-sm leading-relaxed text-white/55">
         에디터에 @를 입력하면 카테고리가 뜹니다. 탭을 고른 뒤 항목을 눌러 색 띠지를 넣어 보세요.
