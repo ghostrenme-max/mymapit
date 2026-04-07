@@ -16,6 +16,8 @@
   --color-ab-point: #c4614a;
   --font-title: 'Cormorant Garamond', Georgia, serif;
   --font-body: 'Syne', system-ui, sans-serif;
+  /** 영어 UI: Syne와 비슷한 기하 산세리프 가독성 보강 */
+  --font-body-en: 'Plus Jakarta Sans', 'Syne', system-ui, sans-serif;
 }
 
 html {
@@ -32,6 +34,10 @@ body {
   font-family: var(--font-body);
   background-color: var(--color-ab-bg);
   color: var(--color-ab-text);
+}
+
+html[data-locale='en'] body {
+  font-family: var(--font-body-en);
 }
 
 #root {
